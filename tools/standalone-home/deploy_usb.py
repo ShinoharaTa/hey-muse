@@ -1,5 +1,6 @@
 """Stage files over the serial-guarded Echo Show console without logging secrets."""
 import argparse
+import base64
 import hashlib
 import io
 import json
@@ -10,7 +11,6 @@ import sys
 import tarfile
 import tempfile
 import time
-import zipfile
 
 BASE = Path.home() / "Documents/muse_on_echo"
 HERE = Path(__file__).resolve().parent
@@ -73,14 +73,14 @@ def deploy(args):
 
     run(f"umask 077; mkdir -p {DEVICE}; chmod 700 {DEVICE}")
     # Spool secrets only in memory. The larger binary/audio archive contains no credentials.
-    file = io.BytesIO() if args.part == "service" else tempfile.TemporaryFile()
+    file = io.BytesIO() if args.part == "config" else tempfile.TemporaryFile()
     with file as archive, tarfile.open(fileobj=archive, mode="w:gz", compresslevel=2) as tar:
         def add(name, content, mode=0o600):
             info = tarfile.TarInfo(name)
             info.mode, info.size = mode, len(content)
             tar.addfile(info, io.BytesIO(content))
 
-        if args.part == "service":
+        if args.part == "config":
             bridge = BASE / "speech-bridge"
             sys.path.insert(0, str(bridge))
             import echo_home as live
@@ -97,25 +97,31 @@ def deploy(args):
             add("calendar-feeds.txt", (BASE / "calendar-feeds.txt").read_bytes())
             with sqlite3.connect(f"file:{(bridge / 'home-requests.sqlite').as_posix()}?mode=ro", uri=True) as db:
                 add("initial-power.json", json.dumps(dict(db.execute("select device,direction from power_last"))).encode())
-            for name in ("echo_home.py", "hall_light.py"):
-                add(name, (args.repo / "tools/mothership" / name).read_bytes())
-            for name in ("calendar_feed.py", "server.py", "probe.py", "home-python", "enable.py"):
-                add(name, (HERE / name).read_bytes().replace(b"\r\n", b"\n"), 0o700)
-            for wheel in sorted(args.wheels.glob("*.whl")):
-                if not wheel.name.endswith("none-any.whl"):
-                    raise ValueError("expected pure Python wheels")
-                with zipfile.ZipFile(wheel) as z:
-                    for member in z.infolist():
-                        if not member.is_dir() and ".data/" not in member.filename:
-                            add("vendor/" + member.filename, z.read(member))
         else:
             add("techo5.next", args.binary.read_bytes(), 0o755)
-            for name in ("install.sh", "rollback.sh", "enable.py"):
+            for name in ("install.sh", "rollback.sh", "cleanup-legacy.sh"):
                 add(name, (HERE / name).read_bytes().replace(b"\r\n", b"\n"), 0o700)
-            files = list(args.audio.glob("*.pcm"))
-            assert len(files) >= 130
-            for path in files:
-                add("voice/" + path.name, path.read_bytes())
+            if args.audio:
+                files = list(args.audio.glob("*.pcm"))
+                if not files:
+                    raise ValueError("no prepared replies in audio directory")
+                for path in files:
+                    add("voice/" + path.name, path.read_bytes())
+            # Read the previous service's SQLite using the PC's interpreter. The
+            # installer verifies this snapshot again after the old writer stops.
+            status = console.run(f"cd {DEVICE} && if test -f home-requests.sqlite && test ! -f power-last.json; then echo MIGRATE; else echo READY; fi")
+            if status == "MIGRATE":
+                encoded = console.run(f"cd {DEVICE} && test ! -s home-requests.sqlite-wal && test ! -s home-requests.sqlite-journal && base64 home-requests.sqlite", 40)
+                if not encoded:
+                    raise RuntimeError("could not read a consistent power-state snapshot")
+                database = base64.b64decode("".join(encoded.split()), validate=True)
+                with sqlite3.connect(":memory:") as db:
+                    db.deserialize(database)
+                    directions = dict(db.execute("select device,direction from power_last"))
+                add("migration-power.json", json.dumps(directions).encode())
+                add("migration-power.sha256", (hashlib.sha256(database).hexdigest() + "  home-requests.sqlite\n").encode())
+            elif status != "READY":
+                raise RuntimeError("could not inspect prior home settings")
         tar.close()
         send(console, archive)
         run(f"cd {DEVICE} && tar xzf stage.tar.gz && rm -f stage.tar.gz && sync", 65)
@@ -123,9 +129,12 @@ def deploy(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("part", choices=("service", "daemon"))
+    parser.add_argument("part", choices=("config", "daemon"))
     parser.add_argument("--serial", required=True)
-    for flag in ("repo", "wheels", "audio", "binary"):
+    for flag in ("audio", "binary"):
         parser.add_argument("--" + flag, type=Path)
-    deploy(parser.parse_args())
+    args = parser.parse_args()
+    if args.part == "daemon" and not args.binary:
+        parser.error("daemon requires --binary")
+    deploy(args)
     print("Staged and verified.")

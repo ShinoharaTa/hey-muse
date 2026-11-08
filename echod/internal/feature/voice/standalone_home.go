@@ -7,25 +7,24 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-)
 
-const homeDirectory = "/data/misc/techo5/standalone-home"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/standalone"
+)
 
 func standaloneHomeReady(stt string) bool {
 	host, _, err := net.SplitHostPort(stt)
 	if err != nil || !net.ParseIP(host).IsLoopback() {
 		return false
 	}
-	_, err = os.Stat(homeDirectory + "/enabled")
-	return err == nil
+	return standalone.Device.Enabled()
 }
 
 func speakHomeReply(ctx context.Context, text string, out func([]int16) error) (bool, error) {
-	if _, err := os.Stat(homeDirectory + "/enabled"); err != nil {
+	if !standalone.Device.Enabled() {
 		return false, nil
 	}
 	name := fmt.Sprintf("%x.pcm", sha256.Sum256([]byte(text)))
-	raw, err := os.ReadFile(filepath.Join(homeDirectory, "voice", name))
+	raw, err := os.ReadFile(filepath.Join(standalone.Directory, "voice", name))
 	if err != nil || len(raw) == 0 || len(raw)%2 != 0 {
 		return false, nil
 	}

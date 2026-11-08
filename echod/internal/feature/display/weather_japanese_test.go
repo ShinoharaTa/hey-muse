@@ -21,7 +21,7 @@ func TestJapaneseWeatherView(t *testing.T) {
 		s.forecast = append(s.forecast, hass.Day{When: now.AddDate(0, 0, i), Condition: []string{"sunny", "rainy", "cloudy"}[i%3], High: 20, Low: 12, Rain: []int{0, 100, -1}[i%3]})
 	}
 	temp, humidity, co2, battery := 24.5, 52.0, 700.0, 90.0
-	s.home = standbyView{Enabled: true, Environment: &homeEnvironment{Temperature: &temp, Humidity: &humidity, CO2: &co2, Battery: &battery}, EnvironmentUpdated: now, Updated: now, Scenes: []homeScene{{"a", "照明をつける", "mdi:lightbulb"}, {"b", "照明を消す", "mdi:lightbulb-off"}, {"c", "寝る直前", "mdi:bed"}, {"d", "暖房", "mdi:air-conditioner"}, {"e", "カーテン", "mdi:curtains"}, {"f", "掃除機", "mdi:robot-vacuum"}}}
+	s.home = standbyView{Enabled: true, Environment: &homeEnvironment{Temperature: &temp, Humidity: &humidity, CO2: &co2, Battery: &battery}, EnvironmentUpdated: now, Updated: now, Scenes: []homeScene{{ID: "a", Label: "照明をつける", Icon: "mdi:lightbulb"}, {ID: "b", Label: "照明を消す", Icon: "mdi:lightbulb-off"}, {ID: "c", Label: "寝る直前", Icon: "mdi:bed"}, {ID: "d", Label: "暖房", Icon: "mdi:air-conditioner"}, {ID: "e", Label: "カーテン", Icon: "mdi:curtains"}, {ID: "f", Label: "掃除機", Icon: "mdi:robot-vacuum"}}}
 	original := s
 	for _, size := range []image.Point{{960, 480}, {1280, 800}} {
 		s = original

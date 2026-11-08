@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/lib/mothership"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/standalone"
 	"github.com/google/uuid"
 )
 
@@ -115,7 +116,9 @@ func (h *hallTurns) executeCommand(ctx context.Context, session string, command 
 	var cfg struct{ URL, Key string }
 	ok := false
 	start := time.Now()
-	if err == nil && json.Unmarshal(raw, &cfg) == nil && strings.HasSuffix(cfg.URL, "/echo-home/v1") {
+	if standalone.Device.Enabled() {
+		ok = standalone.Device.Appliance(ctx, command.target, command.action) == nil
+	} else if err == nil && json.Unmarshal(raw, &cfg) == nil && strings.HasSuffix(cfg.URL, "/echo-home/v1") {
 		var result struct{ OK bool }
 		url := strings.TrimSuffix(cfg.URL, "/echo-home/v1") + "/echo-hall/v1"
 		payload := map[string]any{"op": "hall", "id": uuid.NewString(), "direction": command.action, "time": time.Now().Unix()}

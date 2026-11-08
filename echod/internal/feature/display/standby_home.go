@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/mothership"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/standalone"
 	"image"
 	"os"
 	"strings"
@@ -13,19 +14,13 @@ import (
 	"time"
 )
 
-type homeScene struct{ ID, Label, Icon string }
-type homeEvent struct {
-	Title, Calendar string
-	Start, End      time.Time
-	Day             bool
-}
+type homeScene = standalone.Scene
+type homeEvent = standalone.Event
 type homeConfig struct {
 	Key, URL string
 	Scenes   []homeScene
 }
-type homeEnvironment struct {
-	Temperature, Humidity, CO2, Battery *float64
-}
+type homeEnvironment = standalone.Environment
 
 type standbyView struct {
 	Scope                  string
@@ -52,14 +47,7 @@ type homeZone struct {
 	bounds image.Rectangle
 	action string
 }
-type homeResult struct {
-	Stale       bool
-	Fetched     time.Time
-	Environment *homeEnvironment
-	OK          bool
-	Events      []homeEvent
-	Controls    []homeScene
-}
+type homeResult = standalone.Result
 
 // Replace just the power slots. A published scene slice may still be in use by
 // the renderer, so never mutate it in place.
@@ -81,6 +69,9 @@ func (h *standbyHome) powerButtons(controls []homeScene) {
 }
 
 func (h *standbyHome) request(ctx context.Context, operation, id string) (homeResult, error) {
+	if standalone.Device.Enabled() {
+		return standalone.Device.Dashboard(ctx, operation, id)
+	}
 	var out homeResult
 	if operation == "scene" || operation == "power_status" {
 		if err := mothership.Wait(ctx, h.cfg.URL); err != nil {
@@ -94,7 +85,7 @@ func (h *standbyHome) request(ctx context.Context, operation, id string) (homeRe
 func (h *standbyHome) run(ctx context.Context, wake func()) {
 	raw, err := os.ReadFile("/data/misc/techo5/idle-home.json")
 	var cfg homeConfig
-	if err != nil || json.Unmarshal(raw, &cfg) != nil || len(cfg.Key) != 64 || cfg.URL == "" {
+	if err != nil || json.Unmarshal(raw, &cfg) != nil || (!standalone.Device.Enabled() && (len(cfg.Key) != 64 || cfg.URL == "")) {
 		return
 	}
 	h.mu.Lock()

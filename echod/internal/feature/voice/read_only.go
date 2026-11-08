@@ -10,6 +10,7 @@ import (
 
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hook"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/mothership"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/standalone"
 )
 
 // ReadOnlyView asks the screen to show an allowlisted local view using cached data.
@@ -64,6 +65,9 @@ type readOnlyConfig struct {
 }
 
 func classifyReadOnly(ctx context.Context, text string) (string, error) {
+	if standalone.Device.Enabled() {
+		return "", nil
+	}
 	raw, err := os.ReadFile("/data/misc/techo5/idle-home.json")
 	if err != nil {
 		return "", nil

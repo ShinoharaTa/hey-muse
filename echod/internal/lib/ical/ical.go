@@ -22,10 +22,6 @@ type Event struct {
 	AllDay                         bool
 }
 
-// maxOccurrences bounds how far one repeating event is walked: a rule with no end that started
-// decades ago still finishes.
-const maxOccurrences = 20000
-
 type prop struct {
 	name   string
 	params map[string]string
@@ -40,6 +36,7 @@ type vevent struct {
 	duration                time.Duration
 	rrule                   string
 	exdates                 []time.Time
+	rdates                  []time.Time
 	recurrenceID            time.Time
 	canceled                bool
 }
@@ -75,7 +72,11 @@ func Events(r io.Reader, from, to time.Time) ([]Event, error) {
 			Start: start.In(time.Local), End: end.In(time.Local), AllDay: v.allDay})
 	}
 	for _, v := range masters {
-		for _, s := range v.occurrences(to) {
+		starts, err := v.occurrences(from, to)
+		if err != nil {
+			return nil, err
+		}
+		for _, s := range starts {
 			if o, ok := overrides[key{v.uid, s.Unix()}]; ok {
 				add(o, o.start)
 				delete(overrides, key{v.uid, s.Unix()})
@@ -130,6 +131,9 @@ func parse(r io.Reader) ([]*vevent, error) {
 		case p.name == "END" && cur != nil && depth > 0:
 			depth--
 		case p.name == "END" && strings.EqualFold(p.value, "VEVENT") && cur != nil:
+			if cur.start.IsZero() && cur.canceled {
+				cur.start = cur.recurrenceID
+			}
 			if !cur.start.IsZero() {
 				out = append(out, cur)
 			}
@@ -160,12 +164,16 @@ func (v *vevent) set(p prop) {
 		v.duration = duration(p.value)
 	case "RRULE":
 		v.rrule = p.value
-	case "EXDATE":
+	case "EXDATE", "RDATE":
 		for _, one := range strings.Split(p.value, ",") {
 			q := p
 			q.value = one
 			if t, _ := when(q); !t.IsZero() {
-				v.exdates = append(v.exdates, t)
+				if p.name == "RDATE" {
+					v.rdates = append(v.rdates, t)
+				} else {
+					v.exdates = append(v.exdates, t)
+				}
 			}
 		}
 	case "RECURRENCE-ID":

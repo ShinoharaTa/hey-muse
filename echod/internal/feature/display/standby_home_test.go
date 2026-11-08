@@ -50,7 +50,7 @@ func TestStandbySendsOnlyTheTappedScene(t *testing.T) {
 	defer cancel()
 	d := &Display{r: testRenderer(), poke: make(chan struct{}, 1)}
 	d.standby.ctx = ctx
-	d.standby.cfg = homeConfig{Key: hexutil.EncodeToString(key), URL: server.URL, Scenes: []homeScene{{"dim", "照明を暗く", "mdi:brightness-4"}, {"night", "寝る直前", "mdi:bed"}}}
+	d.standby.cfg = homeConfig{Key: hexutil.EncodeToString(key), URL: server.URL, Scenes: []homeScene{{ID: "dim", Label: "照明を暗く", Icon: "mdi:brightness-4"}, {ID: "night", Label: "寝る直前", Icon: "mdi:bed"}}}
 	d.standby.view = standbyView{Enabled: true, Scenes: d.standby.cfg.Scenes}
 	d.r.drawStandby(scene{phase: "idle", now: time.Now(), home: d.standby.view})
 	b := d.r.homeZones[1].bounds
