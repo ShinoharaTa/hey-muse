@@ -1,0 +1,8 @@
+#!/bin/sh
+set -eu
+umask 077
+d=/data/misc/techo5/standalone-home
+export PYTHONHOME="$d/runtime/usr" LD_LIBRARY_PATH="$d/runtime/usr/lib:$d/runtime/lib"
+export PYTHONTZPATH="$d/runtime/usr/share/zoneinfo" PYTHONPATH="$d/vendor:$d" PYTHONNOUSERSITE=1
+export SWITCHBOT_CREDENTIALS="$d/switchbot.env" SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+exec "$d/runtime/usr/bin/python3" "$@"

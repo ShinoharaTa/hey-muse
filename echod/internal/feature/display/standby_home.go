@@ -53,6 +53,8 @@ type homeZone struct {
 	action string
 }
 type homeResult struct {
+	Stale       bool
+	Fetched     time.Time
 	Environment *homeEnvironment
 	OK          bool
 	Events      []homeEvent
@@ -108,13 +110,16 @@ func (h *standbyHome) run(ctx context.Context, wake func()) {
 		resp, err := h.request(ctx, "agenda", "")
 		h.mu.Lock()
 		ok := err == nil && resp.OK
-		h.view.Unavailable = !ok
+		h.view.Unavailable = !ok || resp.Stale
+		if err == nil && !h.busy && h.lastTap == previousTap {
+			h.powerButtons(resp.Controls)
+		}
 		if ok {
-			if !h.busy && h.lastTap == previousTap {
-				h.powerButtons(resp.Controls)
-			}
 			h.view.Events = resp.Events
-			h.view.Updated = time.Now()
+			h.view.Updated = resp.Fetched
+			if h.view.Updated.IsZero() {
+				h.view.Updated = time.Now()
+			}
 			h.view.Page = 0
 		}
 		h.mu.Unlock()

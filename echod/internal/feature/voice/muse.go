@@ -134,7 +134,10 @@ func (m *viaMuse) startTurn(phrase string, followUp bool) error {
 
 func (m *viaMuse) Name() string { return "muse" }
 
-func (m *viaMuse) Ready() bool { return config.Get().Brain.Mode == config.BrainMuse && m.link.Ready() }
+func (m *viaMuse) Ready() bool {
+	b := config.Get().Brain
+	return b.Mode == config.BrainMuse && (m.link.Ready() || standaloneHomeReady(b.STT))
+}
 
 // Excuse is why Muse cannot take a turn, for the device to say: a tone alone does not tell somebody
 // who was heard whether to say it again, wait, or go and pair the device.
@@ -167,6 +170,9 @@ func museVoice() speech.Voice {
 
 // speakMuse says text in voice v: through the endpoint the settings name, or in the device's own.
 func speakMuse(ctx context.Context, v speech.Voice, text string, out func(samples []int16) error) error {
+	if played, err := speakHomeReply(ctx, text, out); played {
+		return err
+	}
 	s := config.Get().Brain.Muse.Speech
 	return speech.Speaker{
 		Cloud: speech.Client{Base: s.Base, Key: s.Key, Model: s.Model, Style: s.Style},

@@ -191,7 +191,8 @@ def executor():
     global _executor
     with _executor_lock:
         if _executor is None:
-            light = ResidentHall()
+            config = HallLight()
+            light = config if config.cfg.get('hall', {}).get('transport') == 'cloud' else ResidentHall()
             light.prepare()
             _executor = light
         return _executor
