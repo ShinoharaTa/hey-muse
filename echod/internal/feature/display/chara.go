@@ -30,6 +30,7 @@ import (
 //	idle.png              the character standing, on a transparent background (required)
 //	busy.png              the character at work, for "thinking" (optional: idle is used)
 //	background.png        the room behind everything on the idle page (optional: frosted glass instead)
+//	rooms/*.png           the room by time of day and weather, in background.png's place (chara_room.go)
 //
 // Expressions are optional edits of those two pictures, same pose and framing, with only the face
 // changed (anim_chara.go says when each shows):
@@ -93,9 +94,14 @@ type charaSet struct {
 	idlePatch      map[string]charaPatch // by expression
 	busyPatch      map[string]charaPatch
 
-	mu      sync.Mutex
-	cache   map[image.Point]*charaScaled
-	pending map[image.Point]bool // sizes scaledSoon is making
+	dir   string          // where the pictures were read from
+	rooms map[string]bool // the room pictures there (chara_room.go)
+
+	mu          sync.Mutex
+	cache       map[image.Point]*charaScaled
+	pending     map[image.Point]bool // sizes scaledSoon is making
+	room        charaRoom            // the room in use
+	roomPending string               // the room being scaled to replace it
 }
 
 // charaBreaths is how many breathing frames the standing picture has: each a little taller than the
@@ -135,13 +141,13 @@ func loadChara() *charaSet {
 		return nil
 	}
 	slog.Info("resident character loaded", "dir", charaDir, "name", set.Name, "lines", len(set.Lines),
-		"background", set.bg != nil, "busy", set.busy != nil, "idle_expressions", len(set.idlePatch), "busy_expressions", len(set.busyPatch))
+		"background", set.bg != nil, "rooms", len(set.rooms), "busy", set.busy != nil, "idle_expressions", len(set.idlePatch), "busy_expressions", len(set.busyPatch))
 	charaCurrent.Store(set)
 	return set
 }
 
 func loadCharaFrom(dir string) (*charaSet, error) {
-	set := &charaSet{cache: map[image.Point]*charaScaled{}, idlePatch: map[string]charaPatch{}, busyPatch: map[string]charaPatch{}}
+	set := &charaSet{dir: dir, rooms: findRooms(dir), cache: map[image.Point]*charaScaled{}, idlePatch: map[string]charaPatch{}, busyPatch: map[string]charaPatch{}}
 	if raw, err := os.ReadFile(filepath.Join(dir, "chara.json")); err == nil {
 		if err := json.Unmarshal(raw, &set.charaConfig); err != nil {
 			return nil, fmt.Errorf("chara.json: %w", err)

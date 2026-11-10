@@ -181,7 +181,7 @@ func (r *renderer) drawCharaHome(s scene) {
 	now := s.now
 	night := nightNow(now)
 
-	key := charaFurnitureKey(s)
+	key := charaFurnitureKey(s) + "|" + c.roomShown()
 	if r.charaStatic == nil || r.charaStatic.Bounds() != r.dst.Bounds() || r.charaStaticKey != key {
 		r.charaFurniture(s, c.scaled(r.w, r.h), layout)
 		r.charaStaticKey = key
@@ -288,7 +288,9 @@ func (r *renderer) charaFurniture(s scene, sc *charaScaled, layout string) {
 	r.dst = r.charaStatic
 	defer func() { r.dst = dst }()
 
-	if sc.bg != nil {
+	if room := c.roomAt(r.w, r.h, s.now, weatherNow(s.weather, s.forecast, s.now)); room != nil {
+		draw.Draw(r.dst, r.dst.Rect, room, image.Point{}, draw.Src)
+	} else if sc.bg != nil {
 		draw.Draw(r.dst, r.dst.Rect, sc.bg, image.Point{}, draw.Src)
 	} else {
 		r.glassBackdrop()
