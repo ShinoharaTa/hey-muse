@@ -5,6 +5,7 @@ package display
 import (
 	"context"
 	"encoding/json"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/voice"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/mothership"
 	"image"
 	"os"
@@ -170,8 +171,26 @@ func (d *Display) tapStandby(at image.Point) bool {
 	if action == "" {
 		return false
 	}
-	if action == "weather" {
+	switch action {
+	case "weather":
 		d.ShowWeather(false)
+		return true
+	case "talk":
+		// The character's Talk button: a turn, as a tap on the clock is.
+		voice.Get().Action()
+		return true
+	case "pet":
+		// A pat on the character's head: it hops and smiles (anim_chara.go).
+		d.r.chara.pet(time.Now())
+		d.wake()
+		return true
+	case "radio":
+		d.openDrawer(drawerRadio)
+		return true
+	case "settings":
+		if !d.OpenSheet("general") {
+			d.showSheet(true)
+		}
 		return true
 	}
 	h := &d.standby
