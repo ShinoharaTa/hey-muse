@@ -70,7 +70,8 @@ func savePlace(r *http.Request) string {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
-	found, err := openmeteo.Find(ctx, where, country)
+	// Named in the screen's language, so the idle page's weather says さいたま市 rather than Saitama.
+	found, err := openmeteo.FindIn(ctx, where, country, config.Get().Screen.Language)
 	if err != nil {
 		return "could not look that up: " + err.Error()
 	}
