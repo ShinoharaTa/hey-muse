@@ -16,6 +16,7 @@ import (
 func (r *renderer) settingsPage(sel category, v cardView, pick *pickerView, pickScroll int) {
 	fc := r.faces()
 	r.pending = r.pending[:0]
+	v.title, v.blurb, v.note = ui(v.title), ui(v.blurb), ui(v.note)
 	r.settingsBase(sel, v.title, v.blurb)
 	for c := category(0); c < categories; c++ {
 		top := r.navTop() + int(c)*(r.navH()+r.navGap())
@@ -36,7 +37,7 @@ func (r *renderer) settingsPage(sel category, v cardView, pick *pickerView, pick
 	maxScroll := r.rowList(card, list, v.rows, v.scroll, surface(1), r.base.Pix)
 	x := card.Max.X - 26
 	for _, a := range v.actions {
-		left := r.pillButton(x, card.Min.Y+r.headerH()/2-2, a.label, a.style)
+		left := r.pillButton(x, card.Min.Y+r.headerH()/2-2, ui(a.label), a.style)
 		r.addZone(zone{r: image.Rect(left-4, card.Min.Y+8, x+4, card.Min.Y+r.headerH()-8), kind: zoneAction, id: a.id})
 		x = left - 12
 	}
@@ -65,13 +66,14 @@ type baseKey struct {
 	title, blurb   string
 	g, a, t, d, rl color.RGBA
 	w, h           int
+	lang           string // the rail's and Done's words are in it
 }
 
 // settingsBase paints the ground, the rail and the empty card with its heading. It is the costly
 // part, soft shadows and gradients a pixel at a time, and the same every frame until the category, the
 // heading or the theme changes, so it is kept and copied.
 func (r *renderer) settingsBase(sel category, title, blurb string) {
-	key := baseKey{sel, title, blurb, walnut, amber, cream, dim, ember, r.w, r.h}
+	key := baseKey{sel, title, blurb, walnut, amber, cream, dim, ember, r.w, r.h, screenLang()}
 	if r.base != nil && r.baseKey == key {
 		copy(r.dst.Pix, r.base.Pix)
 		return
@@ -97,7 +99,7 @@ func (r *renderer) settingsBase(sel category, title, blurb string) {
 			fg, face = onAccent(), fc.navBold
 		}
 		r.icon(c, 12+30, top+r.navH()/2, fg)
-		r.text(face, categoryNames[c], 12+58, top+r.navH()/2+9, fg)
+		r.text(face, ui(categoryNames[c]), 12+58, top+r.navH()/2+9, fg)
 	}
 	card := r.nextCard(r.w, r.h)
 	r.text(fc.header, title, card.Min.X+r.rowIn(), card.Min.Y+46, cream)
@@ -114,7 +116,7 @@ func (r *renderer) settingsBase(sel category, title, blurb string) {
 // settingsShell paints what every category shares, the ground, Done and the empty card, from a copy
 // kept until the theme changes: its gradients and the card's shadow are most of the drawing.
 func (r *renderer) settingsShell() {
-	key := baseKey{g: walnut, a: amber, t: cream, d: dim, rl: ember, w: r.w, h: r.h}
+	key := baseKey{g: walnut, a: amber, t: cream, d: dim, rl: ember, w: r.w, h: r.h, lang: screenLang()}
 	if r.shell != nil && r.shellKey == key {
 		copy(r.dst.Pix, r.shell.Pix)
 		return
@@ -125,7 +127,8 @@ func (r *renderer) settingsShell() {
 	r.roundShadow(done, 25, 8, 3, shadowAlpha()*0.6)
 	r.roundFill(done, 25, surface(3), surface(2))
 	r.roundStroke(done, 25, 1.2, ember)
-	r.text(fc.button, "Done", done.Min.X+(done.Dx()-r.width(fc.button, "Done"))/2, done.Min.Y+33, cream)
+	doneWord := ui("Done")
+	r.text(fc.button, doneWord, done.Min.X+(done.Dx()-r.width(fc.button, doneWord))/2, done.Min.Y+33, cream)
 
 	// The card, floating over the ground.
 	card := r.nextCard(r.w, r.h)
