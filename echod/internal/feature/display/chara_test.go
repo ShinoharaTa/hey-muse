@@ -45,9 +45,25 @@ func testChara() *charaSet {
 	}
 }
 
+// pinCharaView makes the saved view v for one test, so the device's own view.json does not change what
+// a test draws.
+func pinCharaView(t *testing.T, v charaView) {
+	charaViewGet()
+	charaViewMu.Lock()
+	old := charaViewNow
+	charaViewNow = v
+	charaViewMu.Unlock()
+	t.Cleanup(func() {
+		charaViewMu.Lock()
+		charaViewNow = old
+		charaViewMu.Unlock()
+	})
+}
+
 // TestCharaScenesDraw draws the character's pages, and writes them as PNGs when SHOW_PREVIEW names a
 // directory, the way TestShowScenesDraw does.
 func TestCharaScenesDraw(t *testing.T) {
+	pinCharaView(t, charaView{})
 	at := time.Date(2026, 11, 7, 14, 50, 0, 0, time.Local)
 	c := testChara()
 	week := []hass.Day{
