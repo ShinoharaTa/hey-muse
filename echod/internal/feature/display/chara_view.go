@@ -34,7 +34,7 @@ type charaView struct {
 const (
 	layoutStandard = "standard" // the clock, two tiles and the buttons at the left, the character at the right
 	layoutChara    = "chara"    // the character large near the middle, a small clock and the weather at the top left
-	layoutClock    = "clock"    // a large clock and the date, the character small at the bottom right
+	layoutClock    = "clock"    // the clock, the next hours' weather and the calendar, the character in the room
 )
 
 var layouts = []string{layoutStandard, layoutChara, layoutClock}
@@ -42,14 +42,14 @@ var layouts = []string{layoutStandard, layoutChara, layoutClock}
 // layoutNames are what a swipe says it turned to.
 var layoutNames = map[string]string{layoutStandard: "いつもの", layoutChara: "キャラ大", layoutClock: "時計大"}
 
-// layout is the page's layout, the standard one unless something else was chosen.
+// layout is the page's layout, the clock's (with what is coming up) unless something else was chosen.
 func (v charaView) layout() string {
 	for _, l := range layouts {
 		if v.Layout == l {
 			return l
 		}
 	}
-	return layoutStandard
+	return layoutClock
 }
 
 // stepLayout turns the page to the next layout (+1) or the one before (-1), and returns it.

@@ -149,14 +149,14 @@ func scalePose(p charaPose, src image.Image, patch charaPatch, room image.Point,
 }
 
 // poseFree is whether a pose on the screen is clear of a layout's clock, tiles and buttons: the large
-// character's layout has none, the standard one keeps the left 610 pixels, the clock's 290.
+// character's layout has none, the standard one keeps the left 610 pixels, the clock's 480.
 func (r *renderer) poseFree(ps *charaPoseScaled, layout string) bool {
 	var left int
 	switch layout {
 	case layoutChara:
 		return false
 	case layoutClock:
-		left = r.s(290)
+		left = r.s(480)
 	default:
 		left = r.s(610)
 	}

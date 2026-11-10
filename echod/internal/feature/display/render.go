@@ -33,6 +33,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/lib/avatar"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/locale"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/openmeteo"
 )
 
 // The palette (walnut ground, amber accent, cream text, dim text, ember rules) is in sheet_widgets.go,
@@ -111,6 +112,10 @@ type scene struct {
 	forecastAt   time.Time
 	weatherPlace string
 	forecast     forecastDays
+	// hours is the hourly forecast and agenda the calendar coming up, for the character's clock layout
+	// (chara_agenda.go).
+	hours  []openmeteo.Hour
+	agenda charaAgenda
 	// showRadar is the rain map in place of the forecast.
 	showRadar  bool
 	radar      home.RadarView
