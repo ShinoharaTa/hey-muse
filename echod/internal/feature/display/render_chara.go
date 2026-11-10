@@ -7,6 +7,7 @@ import (
 	"image"
 	"image/color"
 	"image/draw"
+	"strings"
 	"time"
 
 	"golang.org/x/image/font"
@@ -115,6 +116,15 @@ func charaDay(days forecastDays, day time.Time) (hass.Day, bool) {
 		}
 	}
 	return hass.Day{}, false
+}
+
+// charaPlace is the weather's place as the tiles name it: the place set for the device, up to its first
+// comma ("Saitama, Japan" is Saitama), or chara.json's place while none is set.
+func charaPlace(c *charaSet, set string) string {
+	if name, _, _ := strings.Cut(set, ","); strings.TrimSpace(name) != "" {
+		return strings.TrimSpace(name)
+	}
+	return c.Place
 }
 
 // charaFloorAt is where the standing picture's left edge and floor are on this screen, in a layout.
@@ -362,10 +372,7 @@ func (r *renderer) charaFurniture(s scene, sc *charaScaled, layout string) {
 	text(24, false, date, 36, 190, muted)
 
 	// Two weather tiles: today and tomorrow. With no forecast yet, one tile says what is known.
-	place := c.Place
-	if place == "" {
-		place = s.weatherPlace
-	}
+	place := charaPlace(c, s.weatherPlace)
 	label := func(day string) string {
 		if place == "" {
 			return day

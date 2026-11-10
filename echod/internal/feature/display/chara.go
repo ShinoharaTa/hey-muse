@@ -57,7 +57,7 @@ type charaConfig struct {
 	Lines []string `json:"lines"`
 	// Petted are the lines for a pat on the head; empty keeps the ordinary line.
 	Petted []string `json:"petted"`
-	// Place names the weather tiles ("今日・東京"); empty leaves the place off.
+	// Place names the weather tiles ("今日・東京") while no place is set for the device; the set one wins.
 	Place string `json:"place"`
 	// Hello is the line under the name on the boot splash; empty leaves it off.
 	Hello string `json:"hello"`

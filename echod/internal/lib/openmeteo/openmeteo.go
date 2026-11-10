@@ -67,11 +67,19 @@ func get(ctx context.Context, base string, q url.Values, into any) error {
 // Find looks a place up by town or postal code. country ("US") narrows it, and is what makes a bare
 // ZIP code mean the American one.
 func Find(ctx context.Context, name, country string) ([]Place, error) {
+	return FindIn(ctx, name, country, "en")
+}
+
+// FindIn is Find with the places' names in a language ("ja": さいたま市, 埼玉県); empty is English.
+func FindIn(ctx context.Context, name, country, lang string) ([]Place, error) {
+	if lang == "" {
+		lang = "en"
+	}
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return nil, errors.New("open-meteo: nothing to look for")
 	}
-	q := url.Values{"name": {name}, "count": {"5"}, "language": {"en"}, "format": {"json"}}
+	q := url.Values{"name": {name}, "count": {"5"}, "language": {lang}, "format": {"json"}}
 	if country != "" {
 		q.Set("countryCode", country)
 	}
