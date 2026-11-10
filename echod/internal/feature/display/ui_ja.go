@@ -54,6 +54,7 @@ var uiJaPrefix = []struct {
 	{"Snoozed until ", func(rest string) string { return rest + " までスヌーズ" }},
 	{"From Home Assistant · ", func(rest string) string { return "Home Assistant から · " + rest }},
 	{"Forget ", func(rest string) string { return rest + " を削除" }},
+	{"This is ", func(rest string) string { return "現在 " + rest }},
 }
 
 var uiJa = map[string]string{
@@ -182,4 +183,18 @@ var uiJa = map[string]string{
 	"Its dates, its weather, and what it listens for": "日付・天気・聞き取る言葉",
 	"Change it on the setup page":                     "セットアップページで変更", "For muting and timers": "ミュートとタイマー用",
 	"Shown with the clock": "時計と一緒に表示",
+
+	// Values that come from the device's own lists.
+	"Show": "表示", "Stable": "安定版", "Home Assistant forecast": "Home Assistant の予報", "Chosen here": "ここで選択",
+	"Automatic": "自動", "Default": "標準", "Old phone": "黒電話", "Chime": "チャイム", "Flat": "フラット",
+	"12-hour": "12 時間", "24-hour": "24 時間",
+	"Center": "中央", "Bottom left": "左下", "Bottom right": "右下",
+	"White": "白", "Gold": "金", "Sky": "空色", "Mint": "ミント",
+	"Classic": "クラシック", "Big": "大きい", "Flip": "フリップ", "Analog": "アナログ", "Words": "言葉",
+	"Sun": "太陽", "Dashboard": "ダッシュボード", "Binary": "2 進数", "World": "世界時計", "Agenda": "予定", "Glow": "グロー",
+	"Full page": "全画面", "Strip after 10 s": "10 秒後に帯", "Strip after 30 s": "30 秒後に帯", "Strip at once": "すぐ帯",
+	"The device's own tones only; alarms still sound": "端末の通知音だけ止める。アラームは鳴ります",
+	"Stops the music after a while":                   "しばらくしたら音楽を止める",
+	"Adjusts the speaker tuning to the room":          "部屋に合わせてスピーカーを調整",
+	"Before alarms that don't choose their own":       "個別に設定していないアラームの前に",
 }
