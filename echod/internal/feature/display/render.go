@@ -49,6 +49,7 @@ type scene struct {
 	phase                string      // idle, listening, thinking, replying, lingering
 	eq                   *eqView     // a turn's bars, when turns are drawn as the equalizer
 	avatar               *avatar.Set // the Muse character, when a turn is drawn with it (render_avatar.go)
+	chara                *charaSet   // the resident character, when one is installed (chara.go)
 	heard                string
 	reply                string
 	since                time.Time
@@ -281,6 +282,15 @@ type renderer struct {
 	// av is where the Muse character is in its animation (render_avatar.go).
 	av avatar.Playhead
 
+	// The resident character (render_chara.go): where it is in its motions, when it wants the next
+	// frame (0 for the page's own cadence), the idle page's furniture kept between frames with what it
+	// was drawn for, and the furniture's buttons.
+	chara          charaAnim
+	charaNext      time.Duration
+	charaStatic    *image.RGBA
+	charaStaticKey string
+	charaZones     []homeZone
+
 	// weatherAt is where the home screen's weather was drawn in the frame last drawn, for a tap there
 	// to open the forecast; empty when it was not drawn. Written while drawing, read by the touch
 	// goroutine, so under its own lock.
@@ -428,6 +438,7 @@ func (r *renderer) draw(s scene) {
 	}
 	r.homeZones = nil
 	r.zmu.Unlock()
+	r.charaNext = 0
 	if !s.showDeck {
 		// Where the deck's buttons were is nothing to tap once something else is drawn there.
 		r.zmu.Lock()
@@ -586,6 +597,14 @@ func (r *renderer) draw(s scene) {
 		return
 	}
 
+	// The resident character's chat page takes a turn before any other style of turn screen.
+	if charaTurn(s) {
+		r.drawCharaTurn(s)
+		if s.showVolume {
+			r.volumeBar(s)
+		}
+		return
+	}
 	if s.eq != nil {
 		if s.homeTurn {
 			r.drawVoicePanel(s)
@@ -629,6 +648,18 @@ func (r *renderer) draw(s scene) {
 			r.slideshowScreensaverPage(s)
 		} else if s.nowPlaying {
 			r.nowPlaying(s)
+		} else if charaOn(s) {
+			r.drawCharaHome(s)
+			if s.strip {
+				r.musicStrip(s)
+			}
+			if s.showDrawer {
+				r.drawer(s)
+			}
+			if s.showVolume {
+				r.volumeBar(s)
+			}
+			return
 		} else if s.home.Enabled && s.phase == "idle" && !s.showDrawer && !s.strip && !s.showAnnouncement && !s.showReminder && s.popup == nil && !s.showVolume && !s.announceRecording {
 			r.drawStandby(s)
 			return

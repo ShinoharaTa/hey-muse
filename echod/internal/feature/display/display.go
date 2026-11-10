@@ -147,6 +147,8 @@ type Display struct {
 	// avatar is the Muse character's sprite sheets, when a set is installed (render_avatar.go); set
 	// once at Start.
 	avatar *avatar.Set
+	// chara is the resident character, when one is installed (chara.go); set once at Start.
+	chara  *charaSet
 	volume int
 	volAt  time.Time
 
@@ -1797,6 +1799,7 @@ func (d *Display) Start(context.Context) error {
 	d.wide = w > 1000 || h > 1000
 	d.mu.Unlock()
 	d.avatar = loadAvatar()
+	d.chara = loadChara()
 	d.followMeters()
 	fw, fh := dev.FrameSize()
 	video.Get().UseScreen(video.Screen{W: w, H: h, Rotated: dev.Rotated(), PixFmt: dev.PixFmt()}, fw, fh)
@@ -1981,6 +1984,7 @@ func (d *Display) frame() time.Duration {
 	s := scene{now: now, phase: view.DisplayPhase(), heard: view.Heard, reply: view.Reply, since: at, ring: ring, call: call}
 	s.snooze = config.Get().Alarms.Snooze()
 	s.home = d.standby.snapshot()
+	s.chara = d.chara
 	s.alarms = alarm.Get().View(now)
 	s.timers = timer.Get().List(now)
 	s.glance = home.Get().Glance()
@@ -2250,6 +2254,11 @@ func (d *Display) frame() time.Duration {
 	}
 	if turnShown(s) && s.avatar != nil {
 		return d.r.av.Until(s.avatar.Manifest, time.Now()) // the character is moving
+	}
+	if next := d.r.charaNext; next > 0 {
+		// The resident character is moving: a blink, a breath, a hop. Never past the next second,
+		// which the clock on its page needs.
+		return min(next, time.Until(now.Truncate(idleFrame).Add(idleFrame)))
 	}
 	if turnShown(s) && !(s.phase == "lingering" && s.eq.quiet) {
 		if s.eq.wave {

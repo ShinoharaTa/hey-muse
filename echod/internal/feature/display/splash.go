@@ -116,6 +116,9 @@ func (r *renderer) splashPlace(set *avatar.Set) splash {
 func (r *renderer) drawSplash(set *avatar.Set, now time.Time, elapsed time.Duration) {
 	draw.Draw(r.dst, r.dst.Rect, image.NewUniform(navy), image.Point{}, draw.Src)
 	s := r.splashPlace(set)
+	if c := charaCurrent.Load(); c != nil {
+		r.drawCharaSplash(c, &s)
+	}
 	r.arcs(s, elapsed)
 	if s.set != nil {
 		s.set.Draw(r.dst, s.at, s.scale, avatar.Idle, r.av.Frame(s.set.Manifest, avatar.Idle, now))
