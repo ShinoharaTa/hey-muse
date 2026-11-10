@@ -4,8 +4,14 @@ package display
 
 import (
 	"image"
+	"image/png"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
 )
 
 // TestPickPoseKeepsToTheHourAndTheHalfHour picks the same pose all through a half hour, only poses
@@ -98,4 +104,63 @@ func TestTintFollowsTheRoom(t *testing.T) {
 	if got := out.Pix; got[0] != 100 || got[1] != 100 || got[2] != 25 || got[3] != 200 || src.Pix[0] != 200 {
 		t.Errorf("tinted %v (source now %v)", got, src.Pix)
 	}
+}
+
+// TestCharaPosesPreview draws each pose of a real character set in two rooms and both layouts that
+// have room for poses: CHARA_DIR names the set and SHOW_PREVIEW where the PNGs go.
+func TestCharaPosesPreview(t *testing.T) {
+	src, out := os.Getenv("CHARA_DIR"), os.Getenv("SHOW_PREVIEW")
+	if src == "" || out == "" {
+		t.Skip("CHARA_DIR and SHOW_PREVIEW not set")
+	}
+	c, err := loadCharaFrom(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func(f func(time.Time) (time.Time, time.Time, bool)) { charaRoomSun = f }(charaRoomSun)
+	day := time.Date(2026, 11, 10, 0, 0, 0, 0, time.Local)
+	charaRoomSun = func(time.Time) (time.Time, time.Time, bool) {
+		return day.Add(6*time.Hour + 13*time.Minute), day.Add(16*time.Hour + 35*time.Minute), true
+	}
+	all := c.Poses
+	for _, p := range all {
+		p.Hours = nil
+		c.Poses = []charaPose{p}
+		for _, when := range []struct {
+			name string
+			off  time.Duration
+			cond string
+		}{{"day", 13 * time.Hour, "sunny"}, {"night", 21 * time.Hour, "rainy"}} {
+			at := day.Add(when.off)
+			for pickPose(c.Poses, at, roomDay, func(charaPose) bool { return true }) != p.Name {
+				at = at.Add(charaPoseEvery)
+			}
+			for _, layout := range []string{layoutStandard, layoutClock} {
+				pinCharaView(t, charaView{Layout: layout})
+				img := image.NewRGBA(image.Rect(0, 0, showWide, showHigh))
+				r := newRenderer(img)
+				for range 500 { // the room and the pose are scaled off the frame
+					want := c.roomFile(roomHour(at, day.Add(6*time.Hour+13*time.Minute), day.Add(16*time.Hour+35*time.Minute), true), roomSky(when.cond))
+					c.roomAt(showWide, showHigh, at, when.cond)
+					if ps := c.poseScaled(p.Name, showWide, showHigh); ps != nil && c.roomShown() == want {
+						break
+					}
+					time.Sleep(10 * time.Millisecond)
+				}
+				s := scene{now: at, phase: "idle", chara: c, weather: home.Weather{Condition: when.cond, Temp: "14°"},
+					forecast: []hass.Day{{When: at, Condition: when.cond, High: 18, Low: 9}, {When: at.AddDate(0, 0, 1), Condition: "sunny", High: 19, Low: 10}}}
+				r.draw(s)
+				r.draw(s) // past the cross-fade from standing
+				s.now = s.now.Add(time.Second)
+				r.draw(s)
+				f, err := os.Create(filepath.Join(out, "pose-"+p.Name+"-"+when.name+"-"+layout+".png"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				png.Encode(f, img)
+				f.Close()
+			}
+		}
+	}
+	c.Poses = all
 }
