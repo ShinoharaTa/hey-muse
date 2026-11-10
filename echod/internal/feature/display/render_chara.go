@@ -128,8 +128,8 @@ func charaFurnitureKey(s scene) string {
 	if len(s.timers) > 0 {
 		timer = s.timers[0].Left.Round(time.Second).String()
 	}
-	return fmt.Sprintf("%s|%s|%v|%s|%s|%s|%d|%v", s.now.Format("2006-01-02 15:04"), s.weatherPlace, s.muted, timer,
-		s.weather.Condition, s.weather.Temp, len(s.forecast), s.forecastAt.IsZero())
+	return fmt.Sprintf("%s|%s|%v|%s|%s|%s|%d|%v|%s", s.now.Format("2006-01-02 15:04"), s.weatherPlace, s.muted, timer,
+		s.weather.Condition, s.weather.Temp, len(s.forecast), s.forecastAt.IsZero(), charaViewGet().weatherView())
 }
 
 // drawCharaHome is the idle page.
@@ -289,10 +289,18 @@ func (r *renderer) charaFurniture(s scene, sc *charaScaled) {
 		text(20, false, line, x+18, 306, ink)
 	}
 	today, okToday := charaDay(s.forecast, s.now)
-	tomorrow, okTomorrow := charaDay(s.forecast, s.now.AddDate(0, 0, 1))
-	tile(36, label("今日"), today, okToday)
-	tile(326, label("明日"), tomorrow, okTomorrow)
-	zones := []homeZone{{rect(36, 214, 564, 104), "weather"}}
+	switch view := charaViewGet().weatherView(); {
+	case view == tileWeek && okToday:
+		r.charaWeekTile(s, rect(36, 214, 564, 104), label("週間"))
+	case view == tileNow && (okToday || s.weather.Temp != ""):
+		r.charaNowTile(s, rect(36, 214, 564, 104), label("いま"), today, okToday)
+	default:
+		tomorrow, okTomorrow := charaDay(s.forecast, s.now.AddDate(0, 0, 1))
+		tile(36, label("今日"), today, okToday)
+		tile(326, label("明日"), tomorrow, okTomorrow)
+	}
+	// A tap on the tiles steps to the next view; the 天気 button opens the forecast page.
+	zones := []homeZone{{rect(36, 214, 564, 104), "weathertile"}}
 
 	// The buttons.
 	buttons := []struct{ label, action, icon string }{
@@ -509,4 +517,69 @@ func (r *renderer) drawCharaSplash(c *charaSet, s *splash) {
 	s.below = s.baseline + drop
 	s.cx, s.cy = float64(r.w)/2, float64(top)+float64(b.Dy())/2
 	s.from = float64(b.Dx())/2 + float64(r.s(arcClearBase))
+}
+
+// charaWeekTile is five days in one wide tile: the day, the sky, the range and the chance of rain.
+func (r *renderer) charaWeekTile(s scene, b image.Rectangle, head string) {
+	r.glassTile(b, 16)
+	ink, muted := charaInk.text, charaInk.muted
+	r.shadowText(r.styleFace(false, 17), head, b.Min.X+r.s(18), b.Min.Y+r.s(22), muted)
+	names := []string{"日", "月", "火", "水", "木", "金", "土"}
+	const n = 5
+	colW := (b.Dx() - r.s(24)) / n
+	center := func(f font.Face, v string, cx, y int, c color.RGBA) {
+		r.shadowText(f, v, cx-r.width(f, v)/2, y, c)
+	}
+	for i := range n {
+		day := s.now.AddDate(0, 0, i)
+		d, ok := charaDay(s.forecast, day)
+		cx := b.Min.X + r.s(12) + colW*i + colW/2
+		name := names[day.Weekday()]
+		switch i {
+		case 0:
+			name = "今日"
+		case 1:
+			name = "明日"
+		}
+		center(r.styleFace(true, 17), name, cx, b.Min.Y+r.s(44), ink)
+		if !ok {
+			center(r.styleFace(false, 17), "—", cx, b.Min.Y+r.s(78), muted)
+			continue
+		}
+		r.weatherIcon(d.Condition, cx, b.Min.Y+r.s(60), r.s(26))
+		center(r.styleFace(false, 17), fmt.Sprintf("%.0f°/%.0f°", d.High, d.Low), cx, b.Min.Y+r.s(86), ink)
+		if d.Rain >= 0 {
+			center(r.styleFace(false, 14), fmt.Sprintf("%d%%", d.Rain), cx, b.Min.Y+r.s(101), charaInk.accent)
+		}
+	}
+}
+
+// charaNowTile is the temperature now, large, beside the sky and today's range.
+func (r *renderer) charaNowTile(s scene, b image.Rectangle, head string, today hass.Day, okToday bool) {
+	r.glassTile(b, 16)
+	ink, muted := charaInk.text, charaInk.muted
+	r.shadowText(r.styleFace(false, 17), head, b.Min.X+r.s(18), b.Min.Y+r.s(22), muted)
+	cond := s.weather.Condition
+	if cond == "" && okToday {
+		cond = today.Condition
+	}
+	temp := s.weather.Temp
+	if temp == "" {
+		temp = "--°"
+	}
+	big := r.styleFace(true, 58)
+	r.shadowText(big, temp, b.Min.X+r.s(18), b.Min.Y+r.s(88), ink)
+	x := b.Min.X + r.s(30) + r.width(big, temp)
+	if cond != "" {
+		r.weatherIcon(cond, x+r.s(30), b.Min.Y+r.s(58), r.s(44))
+		x += r.s(70)
+		r.shadowText(r.styleFace(true, 26), locale.Sky(cond, "ja"), x, b.Min.Y+r.s(56), ink)
+	}
+	if okToday {
+		line := fmt.Sprintf("今日 %.0f° / %.0f°", today.High, today.Low)
+		if today.Rain >= 0 {
+			line += fmt.Sprintf("  雨%d%%", today.Rain)
+		}
+		r.shadowText(r.styleFace(false, 20), line, x, b.Min.Y+r.s(88), ink)
+	}
 }
