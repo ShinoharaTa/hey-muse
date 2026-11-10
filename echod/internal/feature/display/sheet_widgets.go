@@ -471,6 +471,7 @@ const (
 // wide column that scrolls with a swipe, with room for long names.
 func (r *paint) picker(p pickerView, scroll int) int {
 	fc := r.faces()
+	p.title, p.opts = ui(p.title), uiAll(p.opts)
 	r.addZone(zone{r: r.dst.Rect, kind: zoneDismiss})
 	r.dimAll(0.5)
 
@@ -596,6 +597,7 @@ func (r *paint) dimAll(by float64) {
 
 func (r *paint) settingRow(card image.Rectangle, top int, row settingRow) {
 	fc := r.faces()
+	row = uiRow(row)
 	if row.kind == ctlHeading {
 		r.text(fc.button, r.fit(fc.button, row.label, card.Dx()-2*r.rowIn()), card.Min.X+r.rowIn(), top+r.s(headHBase)-r.s(12), amber)
 		return
