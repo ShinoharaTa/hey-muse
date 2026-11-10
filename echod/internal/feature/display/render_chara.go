@@ -188,10 +188,67 @@ func (r *renderer) drawCharaHome(s scene) {
 	}
 	draw.Draw(r.dst, r.dst.Rect, r.charaStatic, image.Point{}, draw.Src)
 
-	// The character: its breathing frame by day, its hop, its eyes.
+	// The character: standing at the front, or doing something in the room, or between the two.
 	a := &r.chara
 	a.phase = "idle"
 	x, floor := r.charaFloorAt(sc, layout)
+	body := sc.idle[0].Bounds().Add(image.Pt(x, floor-sc.idle[0].Bounds().Dy()))
+	poseName, ps := r.poseNow(c, now, layout)
+	was, fade := a.pose(now, poseName)
+	switch {
+	case fade < 1:
+		// From one figure to the next: both as they rest, one fading out as the other comes in.
+		r.drawFigure(c, sc, was, x, floor, 1-fade)
+		r.drawFigure(c, sc, poseName, x, floor, fade)
+		r.wantFrame(40 * time.Millisecond)
+	case ps != nil:
+		r.drawPose(ps, now, night)
+		body = ps.rect()
+	default:
+		r.drawStanding(sc, now, night, x, floor)
+	}
+
+	// The speech bubble, over the character's head, rising into place when its line changes.
+	line := c.charaLine(now)
+	if poseName != "" {
+		line = c.poseLine(poseName, now)
+	}
+	if said := a.saying(now); said != "" {
+		line = said
+		r.wantFrame(time.Until(a.saidUntil) + 10*time.Millisecond)
+	} else if _, _, petting := a.petted(now); petting || (!a.petAt.IsZero() && now.Sub(a.petAt) < 4*time.Second) {
+		line = c.pettedLine(a.petAt)
+	}
+	if line != "" {
+		rise, moving := a.bubble(now, line)
+		if moving {
+			r.wantFrame(80 * time.Millisecond)
+		}
+		f := r.styleFace(false, 22)
+		w := min(r.width(f, line)+r.s(44), r.s(400))
+		line = r.fit(f, line, w-r.s(44))
+		x1, top0 := r.w-r.s(30), r.s(26)
+		if layout == layoutChara {
+			// Beside the large character's head, under the weather, rather than over its hair.
+			x1, top0 = r.s(30)+w, r.s(236)
+		}
+		top := top0 + int(float64(r.s(6))*(1-rise))
+		bb := image.Rect(x1-w, top, x1, top+r.s(50))
+		r.roundFill(bb, float64(r.s(25)), charaInk.bubble, charaInk.bubble)
+		r.text(f, line, bb.Min.X+r.s(22), top+r.s(34), charaInk.bubbleText)
+	}
+
+	// Taps: the character itself, the weather, and the buttons.
+	zones := append([]homeZone{{body, "pet"}}, r.charaZones...)
+	r.zmu.Lock()
+	r.homeZones = zones
+	r.zmu.Unlock()
+}
+
+// drawStanding is the character standing at the front: its breathing frame by day, its hop, its eyes,
+// the sparkles of a pat.
+func (r *renderer) drawStanding(sc *charaScaled, now time.Time, night bool, x, floor int) {
+	a := &r.chara
 	dy, shape, bounceNext := a.bounce(now)
 	r.wantFrame(bounceNext)
 	eyes, blinkNext := a.blink(now, night, sc.idleExpr[exprEyesHalf].img != nil)
@@ -240,40 +297,33 @@ func (r *renderer) drawCharaHome(s scene) {
 		}
 		r.wantFrame(80 * time.Millisecond)
 	}
+}
 
-	// The speech bubble, over the character's head, rising into place when its line changes.
-	line := c.charaLine(now)
-	if said := a.saying(now); said != "" {
-		line = said
-		r.wantFrame(time.Until(a.saidUntil) + 10*time.Millisecond)
-	} else if petting || (!a.petAt.IsZero() && now.Sub(a.petAt) < 4*time.Second) {
-		line = c.pettedLine(a.petAt)
-	}
-	if line != "" {
-		rise, moving := a.bubble(now, line)
-		if moving {
-			r.wantFrame(80 * time.Millisecond)
+// drawPose is the character doing something in the room, blinking.
+func (r *renderer) drawPose(ps *charaPoseScaled, now time.Time, night bool) {
+	draw.Draw(r.dst, ps.rect(), ps.img, image.Point{}, draw.Over)
+	eyes, next := r.chara.blink(now, night, false)
+	r.wantFrame(next)
+	if next == 0 {
+		if until := r.chara.untilBlink(now); until > 0 && until < 2*time.Second {
+			r.wantFrame(until)
 		}
-		f := r.styleFace(false, 22)
-		w := min(r.width(f, line)+r.s(44), r.s(400))
-		line = r.fit(f, line, w-r.s(44))
-		x1, top0 := r.w-r.s(30), r.s(26)
-		if layout == layoutChara {
-			// Beside the large character's head, under the weather, rather than over its hair.
-			x1, top0 = r.s(30)+w, r.s(236)
-		}
-		top := top0 + int(float64(r.s(6))*(1-rise))
-		bb := image.Rect(x1-w, top, x1, top+r.s(50))
-		r.roundFill(bb, float64(r.s(25)), charaInk.bubble, charaInk.bubble)
-		r.text(f, line, bb.Min.X+r.s(22), top+r.s(34), charaInk.bubbleText)
 	}
+	if eyes != "" && ps.eyes.img != nil {
+		b := ps.eyes.img.Bounds()
+		draw.Draw(r.dst, b.Add(ps.at.Add(ps.eyes.at)), ps.eyes.img, b.Min, draw.Over)
+	}
+}
 
-	// Taps: the character itself, the weather, and the buttons.
-	body := sc.idle[0].Bounds().Add(image.Pt(x, floor-sc.idle[0].Bounds().Dy()))
-	zones := append([]homeZone{{body, "pet"}}, r.charaZones...)
-	r.zmu.Lock()
-	r.homeZones = zones
-	r.zmu.Unlock()
+// drawFigure is a figure at rest through an alpha, for a cross-fade: standing ("") or a pose.
+func (r *renderer) drawFigure(c *charaSet, sc *charaScaled, name string, x, floor int, alpha float64) {
+	if name == "" {
+		drawAlpha(r.dst, sc.idle[0], image.Pt(x, floor-sc.idle[0].Bounds().Dy()), alpha)
+		return
+	}
+	if ps := c.poseScaled(name, r.w, r.h); ps != nil {
+		drawAlpha(r.dst, ps.img, ps.at, alpha)
+	}
 }
 
 // charaFurniture draws everything on the idle page but the character and the bubble into the

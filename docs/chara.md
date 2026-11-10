@@ -12,6 +12,7 @@
 | `busy.png` | 任意 | 作業中の絵（ノート PC を開いているなど）。会話の「作業中」カードに出る。無ければ `idle.png` |
 | `background.png` | 任意 | 部屋の絵。画面いっぱい（960×480 以上の横長）に切り抜いて敷く。無ければすりガラスの背景 |
 | `rooms/<時間帯>_<天気>.png` | 任意 | 時間帯と天気ごとの部屋の絵。あれば `background.png` の代わりに使う（下の「部屋の時間帯と天気」） |
+| `pose_<名前>.png` | 任意 | 部屋で過ごすポーズ（机で勉強、コーヒーなど）。背景透過。`chara.json` の `poses` で置き場所を決める |
 | `chara.json` | 任意 | 名前と吹き出しの台詞、天気の地名 |
 
 ```json
@@ -58,6 +59,25 @@
 
 全部を展開すると 1 枚 6 MB になるので、使う 1 枚だけを画面の大きさに縮めて持ちます。切り替わるときは描画とは別に読み込み、終わるまでは前の部屋のままです。
 
+### 部屋で過ごすポーズ（任意）
+
+部屋の家具の位置に合わせて、座る・くつろぐなどのポーズを置けます。絵は部屋と同じ縮尺で描かれ、家具の上に重なります。
+
+```json
+"poses": [
+  {"name": "study",  "x": 1262, "y": 873, "h": 420, "hours": ["morning", "day", "night"], "lines": ["いま勉強中…"]},
+  {"name": "coffee", "x": 1262, "y": 873, "h": 410, "hours": ["dawn", "morning", "evening"]},
+  {"name": "relax",  "x": 950,  "y": 905, "h": 360, "hours": ["evening", "night"]}
+]
+```
+
+- `name` は絵の名前で、`pose_study.png` を読みます。`pose_study_eyes_closed.png` があれば瞬きします
+- `x` と `y` は絵の下辺の真ん中、`h` は絵の高さで、部屋の絵（`background.png` か `rooms/` の絵）の画素で書きます
+- `hours` はそのポーズをする時間帯（上の表）。省略するといつでも
+- `lines` はそのポーズの間の吹き出しの台詞。省略すると `lines`
+
+30 分ごとに、時間帯に合うポーズと立ち姿の中から 1 つを選びます。同じ 30 分の間は再起動しても同じです。時計やタイルに重なるポーズはそのレイアウトでは選びません（いつもの: 左 610 px、時計大: 左 290 px。キャラ大はいつも立ち姿）。なでる・呼びかける・会話すると手前の立ち姿に戻り、3 分たつと部屋に戻ります。切り替わりは 0.3 秒のクロスフェードです。
+
 ### 動き
 
 - **瞬き**: 2 秒 + 指数分布（平均 2 秒、最長 8 秒）の間隔で、半目 80 ms・閉じ 80 ms・半目 80 ms。15% で 2 回連続。吹き出しの交代やフェーズの切り替わりでも瞬きます
@@ -84,6 +104,7 @@
 - `echod/internal/feature/display/render_chara.go`: 3 画面の描画。座標は Show 5 の画素で書き、`r.s` で拡大します
 - `render.go` の `draw` が、キャラがあれば会話を `drawCharaTurn`、待機を `drawCharaHome` に回します。SwitchBot の待機画面（`idle-home.json`）より優先します
 - `echod/internal/feature/display/chara_room.go`: 時間帯と天気から部屋の絵を選ぶ
+- `echod/internal/feature/display/chara_pose.go`: ポーズの読み込み、部屋の座標から画面への配置、30 分ごとの選択
 - プレビューは `SHOW_PREVIEW=<dir> go test ./internal/feature/display -run TestCharaScenesDraw`。端末の絵で全部の部屋を描くには `CHARA_DIR=/data/misc/techo5/chara SHOW_PREVIEW=<dir>` で `-run TestCharaRoomsPreview`（Linux で。macOS では display パッケージのテストが bluez の都合で走りません）
 
 ## 端末に残す
