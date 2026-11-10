@@ -103,6 +103,11 @@ type Device struct {
 	row    []byte
 	bands  [][]byte // scratch for rotate: one panel row per canvas column in a band
 
+	// drawn is the canvas each page was last painted from by rotate, so a band of canvas columns that
+	// has not changed since is skipped without being turned: turning is most of what a frame costs on
+	// a rotated panel, and a frame that moves one picture leaves most bands as they were.
+	drawn [][]byte
+
 	// stale marks a page that a frame (PresentFrame) was painted on, so it no longer holds what its
 	// shadow says: the next Present onto it writes every row.
 	stale []bool
@@ -287,8 +292,26 @@ func (d *Device) rotate(dst []byte, next int) {
 	cols := min(w, d.panelH)
 	height := min(h, d.panelW)
 
+	if len(d.drawn) != len(d.shadow) {
+		d.drawn = make([][]byte, len(d.shadow))
+	}
+	drawn := d.drawn[next]
+	if len(drawn) != len(img.Pix) {
+		// Nothing painted from this canvas yet, or a canvas of another size: every band is turned.
+		drawn = make([]byte, len(img.Pix))
+		d.drawn[next] = drawn
+		whole = true
+	}
+
 	for x0 := 0; x0 < cols; x0 += band {
 		n := min(band, cols-x0)
+		if !whole && sameBand(img, drawn, x0, n, height) {
+			continue
+		}
+		for y := 0; y < height; y++ {
+			i := y*img.Stride + x0*4
+			copy(drawn[i:i+n*4], img.Pix[i:i+n*4])
+		}
 		// One loop per layout, so the choice is made once a band and not once a pixel.
 		switch {
 		case fast && swap:
@@ -328,6 +351,17 @@ func (d *Device) rotate(dst []byte, next int) {
 			copy(dst[at:at+rowBytes], row)
 		}
 	}
+}
+
+// sameBand is whether canvas columns x0 to x0+n are what was last painted onto the page, in every row.
+func sameBand(img *image.RGBA, drawn []byte, x0, n, height int) bool {
+	for y := 0; y < height; y++ {
+		i := y*img.Stride + x0*4
+		if !bytes.Equal(img.Pix[i:i+n*4], drawn[i:i+n*4]) {
+			return false
+		}
+	}
+	return true
 }
 
 // pan shows page next.
