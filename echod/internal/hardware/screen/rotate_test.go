@@ -86,3 +86,46 @@ func BenchmarkOldRotate(b *testing.B) {
 		oldRotate(d, dst)
 	}
 }
+
+// Frames that change one corner, painted onto the pages in turn as Present flips them: every page has
+// to end up as the pixel-at-a-time way would draw that frame, the bands skipped as unchanged included.
+func TestRotateSkipsOnlyBandsThePageAlreadyHolds(t *testing.T) {
+	d, _ := fake([4]uint{16, 8, 0, 24})
+	pages := make([][]byte, d.pages)
+	for p := range pages {
+		pages[p] = make([]byte, d.pageBytes)
+	}
+	rng := rand.New(rand.NewSource(2))
+	rng.Read(d.canvas.Pix)
+	want := make([]byte, d.pageBytes)
+	for frame := range 12 {
+		// A picture at the right moving a few pixels, as the character breathing does.
+		for y := 100 + frame; y < 300+frame; y++ {
+			for x := 700; x < 900; x++ {
+				d.canvas.Pix[y*d.canvas.Stride+x*4] = byte(frame * 20)
+			}
+		}
+		next := frame % d.pages
+		oldRotate(d, want)
+		d.rotate(pages[next], next)
+		if !bytes.Equal(pages[next], want) {
+			t.Fatalf("frame %d on page %d differs", frame, next)
+		}
+	}
+}
+
+// One picture moving at the right, the rest still: the idle page with the character breathing.
+func BenchmarkRotateOnePictureMoves(b *testing.B) {
+	d, dst := fake([4]uint{16, 8, 0, 24})
+	rand.New(rand.NewSource(1)).Read(d.canvas.Pix)
+	d.rotate(dst, 0)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		for y := 60; y < 470; y++ {
+			for x := 640; x < 940; x += 7 {
+				d.canvas.Pix[y*d.canvas.Stride+x*4]++
+			}
+		}
+		d.rotate(dst, 0)
+	}
+}
