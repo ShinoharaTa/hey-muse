@@ -65,14 +65,14 @@
 
 ```json
 "poses": [
-  {"name": "study",  "x": 1262, "y": 873, "h": 420, "hours": ["morning", "day", "night"], "lines": ["いま勉強中…"]},
-  {"name": "coffee", "x": 1262, "y": 873, "h": 410, "hours": ["dawn", "morning", "evening"]},
-  {"name": "relax",  "x": 950,  "y": 905, "h": 360, "hours": ["evening", "night"]}
+  {"name": "study",  "x": 1255, "y": 778, "h": 414, "hours": ["morning", "day", "night"], "lines": ["いま勉強中…"]},
+  {"name": "coffee", "x": 1255, "y": 775, "h": 408, "hours": ["dawn", "morning", "evening"]},
+  {"name": "relax",  "x": 965,  "y": 940, "h": 414, "hours": ["evening", "night"]}
 ]
 ```
 
 - `name` は絵の名前で、`pose_study.png` を読みます。`pose_study_eyes_closed.png` があれば瞬きします
-- `x` と `y` は絵の下辺の真ん中、`h` は絵の高さで、部屋の絵（`background.png` か `rooms/` の絵）の画素で書きます
+- `x` と `y` は絵の下辺の真ん中、`h` は絵の高さで、部屋の絵（`background.png` か `rooms/` の絵）の画素で書きます。座るポーズは太ももの裏（絵の高さの下から 1/4 あたり）が座面に来るように、くつろぐポーズはクッションのくぼみに腰が沈むように合わせると自然です。下辺は画面の外に出てもかまいません
 - `hours` はそのポーズをする時間帯（上の表）。省略するといつでも
 - `lines` はそのポーズの間の吹き出しの台詞。省略すると `lines`
 
