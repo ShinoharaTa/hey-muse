@@ -77,3 +77,25 @@ func TestCalledToTheFront(t *testing.T) {
 		t.Errorf("after the fade: %q %v", was, in)
 	}
 }
+
+// TestTintFollowsTheRoom dims a picture by three quarters of how much darker the room is than the day
+// room, not below half, and leaves the day room's light alone.
+func TestTintFollowsTheRoom(t *testing.T) {
+	day := [3]float64{189, 158, 171}
+	if got := tintFor(day, day); got != [3]float64{1, 1, 1} {
+		t.Errorf("the day room tints %v", got)
+	}
+	dawn := tintFor([3]float64{86, 75, 124}, day)
+	if dawn[0] < 0.58 || dawn[0] > 0.6 || dawn[2] < 0.78 || dawn[2] > 0.8 {
+		t.Errorf("dawn tints %v, want about 0.59 red and 0.79 blue", dawn)
+	}
+	if black := tintFor([3]float64{}, day); black != [3]float64{tintFloor, tintFloor, tintFloor} {
+		t.Errorf("a black room tints %v", black)
+	}
+	src := image.NewRGBA(image.Rect(0, 0, 1, 1))
+	copy(src.Pix, []uint8{200, 100, 50, 200})
+	out := tinted(src, [3]float64{0.5, 1, 0.5})
+	if got := out.Pix; got[0] != 100 || got[1] != 100 || got[2] != 25 || got[3] != 200 || src.Pix[0] != 200 {
+		t.Errorf("tinted %v (source now %v)", got, src.Pix)
+	}
+}

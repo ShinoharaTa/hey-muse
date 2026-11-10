@@ -202,7 +202,7 @@ func (r *renderer) drawCharaHome(s scene) {
 		r.drawFigure(c, sc, poseName, x, floor, fade)
 		r.wantFrame(40 * time.Millisecond)
 	case ps != nil:
-		r.drawPose(ps, now, night)
+		r.drawPose(c, poseName, ps, now, night)
 		body = ps.rect()
 	default:
 		r.drawStanding(sc, now, night, x, floor)
@@ -300,8 +300,8 @@ func (r *renderer) drawStanding(sc *charaScaled, now time.Time, night bool, x, f
 }
 
 // drawPose is the character doing something in the room, blinking.
-func (r *renderer) drawPose(ps *charaPoseScaled, now time.Time, night bool) {
-	draw.Draw(r.dst, ps.rect(), ps.img, image.Point{}, draw.Over)
+func (r *renderer) drawPose(c *charaSet, name string, ps *charaPoseScaled, now time.Time, night bool) {
+	draw.Draw(r.dst, ps.rect(), c.litIn(name, ps.img), image.Point{}, draw.Over)
 	eyes, next := r.chara.blink(now, night, false)
 	r.wantFrame(next)
 	if next == 0 {
@@ -311,7 +311,7 @@ func (r *renderer) drawPose(ps *charaPoseScaled, now time.Time, night bool) {
 	}
 	if eyes != "" && ps.eyes.img != nil {
 		b := ps.eyes.img.Bounds()
-		draw.Draw(r.dst, b.Add(ps.at.Add(ps.eyes.at)), ps.eyes.img, b.Min, draw.Over)
+		draw.Draw(r.dst, b.Add(ps.at.Add(ps.eyes.at)), c.litIn(name+" eyes", ps.eyes.img), b.Min, draw.Over)
 	}
 }
 
@@ -322,7 +322,7 @@ func (r *renderer) drawFigure(c *charaSet, sc *charaScaled, name string, x, floo
 		return
 	}
 	if ps := c.poseScaled(name, r.w, r.h); ps != nil {
-		drawAlpha(r.dst, ps.img, ps.at, alpha)
+		drawAlpha(r.dst, c.litIn(name, ps.img), ps.at, alpha)
 	}
 }
 

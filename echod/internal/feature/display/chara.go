@@ -109,7 +109,10 @@ type charaSet struct {
 	pending     map[image.Point]bool // sizes scaledSoon is making
 	room        charaRoom            // the room in use
 	roomPending string               // the room being scaled to replace it
-	poseSize    image.Point          // the screen size poseCache is for
+	dayMean     [3]float64           // the clear day room's average color, once dayMeasured
+	dayMeasured bool
+	lit         map[string]*image.RGBA // pictures in the room's light (litIn), for the room in use
+	poseSize    image.Point            // the screen size poseCache is for
 	poseCache   map[string]*charaPoseScaled
 	posePending map[string]bool
 }
