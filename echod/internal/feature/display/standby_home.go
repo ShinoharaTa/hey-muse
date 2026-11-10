@@ -175,6 +175,11 @@ func (d *Display) tapStandby(at image.Point) bool {
 	case "weather":
 		d.ShowWeather(false)
 		return true
+	case "weathertile":
+		// The character's weather tiles: the next of today and tomorrow, the week, and now.
+		nextWeatherView()
+		d.wake()
+		return true
 	case "talk":
 		// The character's Talk button: a turn, as a tap on the clock is.
 		voice.Get().Action()
