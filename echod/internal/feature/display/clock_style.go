@@ -108,6 +108,16 @@ const styleNameFor = 1500 * time.Millisecond
 // stepClockStyle turns to the next style (+1) or the one before (-1), from a swipe across the clock,
 // and says its name for a moment.
 func (d *Display) stepClockStyle(step int) {
+	if d.chara != nil {
+		// With the character on the page, a swipe turns its layout instead (chara_view.go), and the
+		// layout's name is said in the character's bubble.
+		to := stepLayout(step)
+		d.r.chara.say(layoutNames[to], time.Now())
+		slog.Info("screen: character layout by a swipe", "layout", to)
+		d.wake()
+		time.AfterFunc(styleNameFor+50*time.Millisecond, d.wake)
+		return
+	}
 	n := len(clockStyles)
 	i := ((clockStyleIndex()+step)%n + n) % n
 	d.mu.Lock()

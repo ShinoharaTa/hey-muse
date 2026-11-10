@@ -117,9 +117,28 @@ func charaDay(days forecastDays, day time.Time) (hass.Day, bool) {
 	return hass.Day{}, false
 }
 
-// charaFloorAt is where the standing picture's left edge and floor are on this screen.
-func (r *renderer) charaFloorAt(sc *charaScaled) (x, floor int) {
-	return r.w - sc.idle[0].Bounds().Dx() - r.s(24), r.h
+// charaFloorAt is where the standing picture's left edge and floor are on this screen, in a layout.
+func (r *renderer) charaFloorAt(sc *charaScaled, layout string) (x, floor int) {
+	w := sc.idle[0].Bounds().Dx()
+	switch layout {
+	case layoutChara:
+		return r.s(640) - w/2, r.h
+	case layoutClock:
+		return r.w - w - r.s(36), r.h - r.s(6)
+	}
+	return r.w - w - r.s(24), r.h
+}
+
+// charaSized is the character at the size a layout draws it: large in the character's layout, small
+// in the clock's. Each size is scaled once and kept (charaSet.scaled).
+func (c *charaSet) charaSized(w, h int, layout string) *charaScaled {
+	switch layout {
+	case layoutChara:
+		return c.scaled(w, h*100/86)
+	case layoutClock:
+		return c.scaled(w, h*52/86)
+	}
+	return c.scaled(w, h)
 }
 
 // charaFurnitureKey is what the idle page's furniture depends on.
@@ -128,20 +147,22 @@ func charaFurnitureKey(s scene) string {
 	if len(s.timers) > 0 {
 		timer = s.timers[0].Left.Round(time.Second).String()
 	}
-	return fmt.Sprintf("%s|%s|%v|%s|%s|%s|%d|%v|%s", s.now.Format("2006-01-02 15:04"), s.weatherPlace, s.muted, timer,
-		s.weather.Condition, s.weather.Temp, len(s.forecast), s.forecastAt.IsZero(), charaViewGet().weatherView())
+	v := charaViewGet()
+	return fmt.Sprintf("%s|%s|%v|%s|%s|%s|%d|%v|%s|%s", s.now.Format("2006-01-02 15:04"), s.weatherPlace, s.muted, timer,
+		s.weather.Condition, s.weather.Temp, len(s.forecast), s.forecastAt.IsZero(), v.weatherView(), v.layout())
 }
 
 // drawCharaHome is the idle page.
 func (r *renderer) drawCharaHome(s scene) {
 	c := s.chara
-	sc := c.scaled(r.w, r.h)
+	layout := charaViewGet().layout()
+	sc := c.charaSized(r.w, r.h, layout)
 	now := s.now
 	night := nightNow(now)
 
 	key := charaFurnitureKey(s)
 	if r.charaStatic == nil || r.charaStatic.Bounds() != r.dst.Bounds() || r.charaStaticKey != key {
-		r.charaFurniture(s, sc)
+		r.charaFurniture(s, c.scaled(r.w, r.h), layout)
 		r.charaStaticKey = key
 	}
 	draw.Draw(r.dst, r.dst.Rect, r.charaStatic, image.Point{}, draw.Src)
@@ -149,7 +170,7 @@ func (r *renderer) drawCharaHome(s scene) {
 	// The character: its breathing frame by day, its hop, its eyes.
 	a := &r.chara
 	a.phase = "idle"
-	x, floor := r.charaFloorAt(sc)
+	x, floor := r.charaFloorAt(sc, layout)
 	dy, shape, bounceNext := a.bounce(now)
 	r.wantFrame(bounceNext)
 	eyes, blinkNext := a.blink(now, night, sc.idleExpr[exprEyesHalf].img != nil)
@@ -201,7 +222,10 @@ func (r *renderer) drawCharaHome(s scene) {
 
 	// The speech bubble, over the character's head, rising into place when its line changes.
 	line := c.charaLine(now)
-	if petting || (!a.petAt.IsZero() && now.Sub(a.petAt) < 4*time.Second) {
+	if said := a.saying(now); said != "" {
+		line = said
+		r.wantFrame(time.Until(a.saidUntil) + 10*time.Millisecond)
+	} else if petting || (!a.petAt.IsZero() && now.Sub(a.petAt) < 4*time.Second) {
 		line = c.pettedLine(a.petAt)
 	}
 	if line != "" {
@@ -229,7 +253,7 @@ func (r *renderer) drawCharaHome(s scene) {
 
 // charaFurniture draws everything on the idle page but the character and the bubble into the
 // picture kept between frames, and remembers where its buttons are.
-func (r *renderer) charaFurniture(s scene, sc *charaScaled) {
+func (r *renderer) charaFurniture(s scene, sc *charaScaled, layout string) {
 	c := s.chara
 	if r.charaStatic == nil || r.charaStatic.Bounds() != r.dst.Bounds() {
 		r.charaStatic = image.NewRGBA(r.dst.Bounds())
@@ -250,9 +274,15 @@ func (r *renderer) charaFurniture(s scene, sc *charaScaled) {
 	}
 	ink, muted := charaInk.text, charaInk.muted
 
+	date := fmt.Sprintf("%d年%d月%d日（%s）", s.now.Year(), s.now.Month(), s.now.Day(), []string{"日", "月", "火", "水", "木", "金", "土"}[s.now.Weekday()])
+	if layout != layoutStandard {
+		r.charaFurnitureAlt(s, layout, date, rect, text)
+		return
+	}
+
 	// The clock and the date.
 	text(108, true, s.now.Format("15:04"), 30, 150, ink)
-	text(24, false, fmt.Sprintf("%d年%d月%d日（%s）", s.now.Year(), s.now.Month(), s.now.Day(), []string{"日", "月", "火", "水", "木", "金", "土"}[s.now.Weekday()]), 36, 190, muted)
+	text(24, false, date, 36, 190, muted)
 
 	// Two weather tiles: today and tomorrow. With no forecast yet, one tile says what is known.
 	place := c.Place
@@ -317,17 +347,74 @@ func (r *renderer) charaFurniture(s scene, sc *charaScaled) {
 	}
 
 	// The status pill: what the device is doing, and what to say to it.
-	b := rect(36, 408, 564, 46)
-	r.glassTile(b, 23)
+	r.charaPill(s, 36, 408, 564)
+	r.charaZones = zones
+}
+
+// charaPill is the status pill at x, y, w wide in the Show 5's pixels: whether the device is ready
+// or its microphone is off, and the first timer's time left.
+func (r *renderer) charaPill(s scene, x, y, w int) {
+	rect := func(x, y, w, h int) image.Rectangle { return image.Rect(r.s(x), r.s(y), r.s(x+w), r.s(y+h)) }
+	r.glassTile(rect(x, y, w, 46), 23)
 	dot, status := charaInk.ready, "Ready · Hey Muse"
 	if s.muted {
 		dot, status = color.RGBA{232, 98, 98, 255}, "マイクオフ"
 	}
-	r.roundFill(rect(54, 424, 14, 14), float64(r.s(7)), dot, dot)
-	text(20, false, status, 80, 439, ink)
+	r.roundFill(rect(x+18, y+16, 14, 14), float64(r.s(7)), dot, dot)
+	r.shadowText(r.styleFace(false, 20), status, r.s(x+44), r.s(y+31), charaInk.text)
 	if len(s.timers) > 0 {
 		left := s.timers[0].Left.Round(time.Second)
-		r.rightText(r.styleFace(false, 20), fmt.Sprintf("タイマー %d:%02d", int(left.Minutes()), int(left.Seconds())%60), r.s(582), r.s(439), charaInk.accent)
+		r.rightText(r.styleFace(false, 20), fmt.Sprintf("タイマー %d:%02d", int(left.Minutes()), int(left.Seconds())%60), r.s(x+w-18), r.s(y+31), charaInk.accent)
+	}
+}
+
+// charaFurnitureAlt is the furniture of the layouts other than the standard one: no buttons, the
+// clock and the weather where the layout puts them. A tap on the weather opens the forecast page;
+// anywhere else not on the character starts a turn, as on the plain clock.
+func (r *renderer) charaFurnitureAlt(s scene, layout, date string, rect func(x, y, w, h int) image.Rectangle,
+	text func(size int, bold bool, v string, x, y int, c color.RGBA)) {
+	ink, muted := charaInk.text, charaInk.muted
+	today, okToday := charaDay(s.forecast, s.now)
+	sky := ""
+	if okToday {
+		sky = fmt.Sprintf("%s  %.0f° / %.0f°", locale.Sky(today.Condition, "ja"), today.High, today.Low)
+		if today.Rain >= 0 {
+			sky += fmt.Sprintf("  雨%d%%", today.Rain)
+		}
+	} else if s.weather.Condition != "" {
+		sky = locale.Sky(s.weather.Condition, "ja") + "  " + s.weather.Temp
+	}
+	var zones []homeZone
+	switch layout {
+	case layoutChara:
+		text(64, true, s.now.Format("15:04"), 30, 92, ink)
+		text(20, false, date, 34, 124, muted)
+		if sky != "" {
+			b := rect(30, 142, 300, 70)
+			r.glassTile(b, 16)
+			if okToday {
+				r.weatherIcon(today.Condition, r.s(64), r.s(177), r.s(40))
+			}
+			text(18, false, "今日", 102, 170, muted)
+			f := r.styleFace(false, 19)
+			r.shadowText(f, r.fit(f, sky, r.s(216)), r.s(102), r.s(198), ink)
+			zones = append(zones, homeZone{b, "weather"})
+		}
+		r.charaPill(s, 30, 418, 300)
+	case layoutClock:
+		text(190, true, s.now.Format("15:04"), 36, 250, ink)
+		text(32, false, date, 46, 304, muted)
+		if sky != "" {
+			b := rect(40, 330, 520, 64)
+			r.glassTile(b, 16)
+			if okToday {
+				r.weatherIcon(today.Condition, r.s(78), r.s(362), r.s(40))
+			}
+			f := r.styleFace(false, 24)
+			r.shadowText(f, r.fit(f, sky, r.s(430)), r.s(116), r.s(371), ink)
+			zones = append(zones, homeZone{b, "weather"})
+		}
+		r.charaPill(s, 40, 412, 520)
 	}
 	r.charaZones = zones
 }
