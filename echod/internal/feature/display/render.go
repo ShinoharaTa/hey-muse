@@ -290,6 +290,8 @@ type renderer struct {
 	charaStatic    *image.RGBA
 	charaStaticKey string
 	charaZones     []homeZone
+	// charaWarmed is the set whose layouts were last sent off to be scaled (charaWarm).
+	charaWarmed *charaSet
 
 	// weatherAt is where the home screen's weather was drawn in the frame last drawn, for a tap there
 	// to open the forecast; empty when it was not drawn. Written while drawing, read by the touch

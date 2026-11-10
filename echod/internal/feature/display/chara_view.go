@@ -27,6 +27,44 @@ var tileViews = []string{tileDays, tileWeek, tileNow}
 
 type charaView struct {
 	Weather string `json:"weather,omitempty"`
+	Layout  string `json:"layout,omitempty"`
+}
+
+// The idle page's layouts, in the order a swipe to the left steps through them.
+const (
+	layoutStandard = "standard" // the clock, two tiles and the buttons at the left, the character at the right
+	layoutChara    = "chara"    // the character large near the middle, a small clock and the weather at the top left
+	layoutClock    = "clock"    // a large clock and the date, the character small at the bottom right
+)
+
+var layouts = []string{layoutStandard, layoutChara, layoutClock}
+
+// layoutNames are what a swipe says it turned to.
+var layoutNames = map[string]string{layoutStandard: "いつもの", layoutChara: "キャラ大", layoutClock: "時計大"}
+
+// layout is the page's layout, the standard one unless something else was chosen.
+func (v charaView) layout() string {
+	for _, l := range layouts {
+		if v.Layout == l {
+			return l
+		}
+	}
+	return layoutStandard
+}
+
+// stepLayout turns the page to the next layout (+1) or the one before (-1), and returns it.
+func stepLayout(step int) string {
+	var to string
+	charaViewSet(func(v *charaView) {
+		cur, n := v.layout(), len(layouts)
+		for i, l := range layouts {
+			if l == cur {
+				to = layouts[((i+step)%n+n)%n]
+			}
+		}
+		v.Layout = to
+	})
+	return to
 }
 
 var (

@@ -93,8 +93,9 @@ type charaSet struct {
 	idlePatch      map[string]charaPatch // by expression
 	busyPatch      map[string]charaPatch
 
-	mu    sync.Mutex
-	cache map[image.Point]*charaScaled
+	mu      sync.Mutex
+	cache   map[image.Point]*charaScaled
+	pending map[image.Point]bool // sizes scaledSoon is making
 }
 
 // charaBreaths is how many breathing frames the standing picture has: each a little taller than the
@@ -292,12 +293,57 @@ func toRGBA(img image.Image) *image.RGBA {
 func (c *charaSet) scaled(w, h int) *charaScaled {
 	key := image.Pt(w, h)
 	c.mu.Lock()
+	s := c.cache[key]
+	c.mu.Unlock()
+	if s != nil {
+		return s
+	}
+	return c.keep(key, c.build(w, h, true))
+}
+
+// scaledSoon is the character alone (no room) at a size a layout draws it, or nil while it is still
+// being made: the first ask starts the scaling, which takes a second or two on the device, off the
+// frame that asked.
+func (c *charaSet) scaledSoon(w, h int) *charaScaled {
+	key := image.Pt(w, h)
+	c.mu.Lock()
 	defer c.mu.Unlock()
 	if s := c.cache[key]; s != nil {
 		return s
 	}
+	if c.pending == nil {
+		c.pending = map[image.Point]bool{}
+	}
+	if !c.pending[key] {
+		c.pending[key] = true
+		go func() {
+			c.keep(key, c.build(w, h, false))
+			c.mu.Lock()
+			delete(c.pending, key)
+			c.mu.Unlock()
+		}()
+	}
+	return nil
+}
+
+// keep stores a scaled set, unless another was stored for the size meanwhile, and returns the one kept.
+func (c *charaSet) keep(key image.Point, s *charaScaled) *charaScaled {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if old := c.cache[key]; old != nil {
+		return old
+	}
+	if len(c.cache) > 6 {
+		clear(c.cache)
+	}
+	c.cache[key] = s
+	return s
+}
+
+// build scales the set to a w by h screen, the room too when room is set.
+func (c *charaSet) build(w, h int, room bool) *charaScaled {
 	s := &charaScaled{idleExpr: map[string]charaPatch{}, busyExpr: map[string]charaPatch{}}
-	if c.bg != nil {
+	if c.bg != nil && room {
 		s.bg = coverScale(c.bg, w, h)
 	}
 	standing := h * 86 / 100
@@ -320,10 +366,6 @@ func (c *charaSet) scaled(w, h int) *charaScaled {
 			s.busyExpr[name] = scalePatch(p, c.busy.Bounds(), s.busy.Bounds())
 		}
 	}
-	if len(c.cache) > 4 {
-		clear(c.cache)
-	}
-	c.cache[key] = s
 	return s
 }
 

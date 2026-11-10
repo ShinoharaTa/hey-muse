@@ -33,6 +33,10 @@ type charaAnim struct {
 	// petAt is the last pat on the head, for its smile, its sparkles and its cooldown.
 	petAt time.Time
 
+	// said is a line put in the bubble for a moment (say), until saidUntil.
+	said      string
+	saidUntil time.Time
+
 	// line and lineAt are the speech bubble's line and when it changed, for its rise.
 	line   string
 	lineAt time.Time
@@ -277,4 +281,18 @@ func easeInOutSine(t float64) float64 { return -(math.Cos(math.Pi*t) - 1) / 2 }
 func easeOutBack(t float64) float64 {
 	const c1, c3 = 1.2, 2.2 // weaker than the usual 1.70158: a chibi lands, it does not spring
 	return 1 + c3*math.Pow(t-1, 3) + c1*math.Pow(t-1, 2)
+}
+
+// say puts a line in the bubble for a moment, over the line of the hour: the name of a layout a swipe
+// turned to.
+func (a *charaAnim) say(line string, now time.Time) {
+	a.said, a.saidUntil = line, now.Add(1500*time.Millisecond)
+}
+
+// saying is the line say put up, while it is due to stay.
+func (a *charaAnim) saying(now time.Time) string {
+	if now.Before(a.saidUntil) {
+		return a.said
+	}
+	return ""
 }
