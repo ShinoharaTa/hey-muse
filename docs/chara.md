@@ -11,6 +11,7 @@
 | `idle.png` | 必須 | 立ち絵。背景透過。縦長（たとえば 600×900）。待機画面では画面の高さの 86% に縮小 |
 | `busy.png` | 任意 | 作業中の絵（ノート PC を開いているなど）。会話の「作業中」カードに出る。無ければ `idle.png` |
 | `background.png` | 任意 | 部屋の絵。画面いっぱい（960×480 以上の横長）に切り抜いて敷く。無ければすりガラスの背景 |
+| `rooms/<時間帯>_<天気>.png` | 任意 | 時間帯と天気ごとの部屋の絵。あれば `background.png` の代わりに使う（下の「部屋の時間帯と天気」） |
 | `chara.json` | 任意 | 名前と吹き出しの台詞、天気の地名 |
 
 ```json
@@ -41,6 +42,22 @@
 
 `chara.json` の `petted` は、なでられたときの吹き出しの台詞です。
 
+### 部屋の時間帯と天気（任意）
+
+`rooms/` に同じ部屋の明かりと窓の外だけを変えた絵を置くと、時間と天気で部屋が切り替わります。名前は `<時間帯>_<天気>.png` です。
+
+| 時間帯 | いつ |
+| --- | --- |
+| `dawn` | 日の出の 1 時間前から 30 分後まで |
+| `morning` | それから 10 時まで |
+| `day` | 日の入りの 1 時間前まで |
+| `evening` | 日の入りの 40 分後まで |
+| `night` | それ以外 |
+
+日の出と日の入りは天気の場所の緯度経度から計算します（場所が分かるまでは 6:00 と 17:30）。天気は `clear`（晴れ・晴れ時々曇り）、`cloudy`（曇り・霧・雪）、`rain`（雨・雷雨・ひょう）です。無い組み合わせはその時間帯の `clear`、それも無ければ `background.png` を使います。照明をつけるかどうかは絵に描き込みます。
+
+全部を展開すると 1 枚 6 MB になるので、使う 1 枚だけを画面の大きさに縮めて持ちます。切り替わるときは描画とは別に読み込み、終わるまでは前の部屋のままです。
+
 ### 動き
 
 - **瞬き**: 2 秒 + 指数分布（平均 2 秒、最長 8 秒）の間隔で、半目 80 ms・閉じ 80 ms・半目 80 ms。15% で 2 回連続。吹き出しの交代やフェーズの切り替わりでも瞬きます
@@ -66,7 +83,8 @@
 - `echod/internal/feature/display/chara.go`: 読み込みと縮小（`golang.org/x/image/draw` の CatmullRom）。画面サイズごとに縮小結果を持ち、Show 8 でも同じ割合で出ます
 - `echod/internal/feature/display/render_chara.go`: 3 画面の描画。座標は Show 5 の画素で書き、`r.s` で拡大します
 - `render.go` の `draw` が、キャラがあれば会話を `drawCharaTurn`、待機を `drawCharaHome` に回します。SwitchBot の待機画面（`idle-home.json`）より優先します
-- プレビューは `SHOW_PREVIEW=<dir> go test ./internal/feature/display -run TestCharaScenesDraw`（Linux で。macOS では display パッケージのテストが bluez の都合で走りません）
+- `echod/internal/feature/display/chara_room.go`: 時間帯と天気から部屋の絵を選ぶ
+- プレビューは `SHOW_PREVIEW=<dir> go test ./internal/feature/display -run TestCharaScenesDraw`。端末の絵で全部の部屋を描くには `CHARA_DIR=/data/misc/techo5/chara SHOW_PREVIEW=<dir>` で `-run TestCharaRoomsPreview`（Linux で。macOS では display パッケージのテストが bluez の都合で走りません）
 
 ## 端末に残す
 
