@@ -303,10 +303,14 @@ func (d *Device) rotate(dst []byte, next int) {
 		whole = true
 	}
 
+	lo, hi := 0, cols
+	if !whole {
+		lo, hi = changedColumns(img, drawn, height)
+	}
 	for x0 := 0; x0 < cols; x0 += band {
 		n := min(band, cols-x0)
-		if !whole && sameBand(img, drawn, x0, n, height) {
-			continue
+		if x0+n <= lo || x0 >= hi {
+			continue // every column of the band is as the page has it
 		}
 		for y := 0; y < height; y++ {
 			i := y*img.Stride + x0*4
@@ -353,15 +357,52 @@ func (d *Device) rotate(dst []byte, next int) {
 	}
 }
 
-// sameBand is whether canvas columns x0 to x0+n are what was last painted onto the page, in every row.
-func sameBand(img *image.RGBA, drawn []byte, x0, n, height int) bool {
+// changedColumns is the run of canvas columns, lo up to hi, holding every pixel that differs from
+// what was last painted onto the page; lo == hi when nothing does. A row that is the same is passed
+// by in one comparison, and a row that differs is searched from both ends for where it does.
+func changedColumns(img *image.RGBA, drawn []byte, height int) (lo, hi int) {
+	w := img.Rect.Dx()
+	lo, hi = w, 0
 	for y := 0; y < height; y++ {
-		i := y*img.Stride + x0*4
-		if !bytes.Equal(img.Pix[i:i+n*4], drawn[i:i+n*4]) {
-			return false
+		i := y * img.Stride
+		a, b := img.Pix[i:i+w*4], drawn[i:i+w*4]
+		if bytes.Equal(a, b) {
+			continue
 		}
+		lo = min(lo, firstDiff(a, b)/4)
+		hi = max(hi, lastDiff(a, b)/4+1)
 	}
-	return true
+	if lo >= hi {
+		return 0, 0
+	}
+	return lo, hi
+}
+
+// diffBlock is how far firstDiff and lastDiff step while the two still match.
+const diffBlock = 256
+
+// firstDiff is the first byte where a and b differ, which they do somewhere.
+func firstDiff(a, b []byte) int {
+	i := 0
+	for i+diffBlock <= len(a) && bytes.Equal(a[i:i+diffBlock], b[i:i+diffBlock]) {
+		i += diffBlock
+	}
+	for i < len(a) && a[i] == b[i] {
+		i++
+	}
+	return i
+}
+
+// lastDiff is the last byte where a and b differ, which they do somewhere.
+func lastDiff(a, b []byte) int {
+	i := len(a)
+	for i-diffBlock >= 0 && bytes.Equal(a[i-diffBlock:i], b[i-diffBlock:i]) {
+		i -= diffBlock
+	}
+	for i > 0 && a[i-1] == b[i-1] {
+		i--
+	}
+	return i - 1
 }
 
 // pan shows page next.
