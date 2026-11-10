@@ -87,6 +87,9 @@ type charaRoom struct {
 	name string // the file, "night_rain.png", or "" for background.png
 	size image.Point
 	img  *image.RGBA
+	// tint is how the room's light colors what is drawn in it, by channel: its average color over
+	// the clear day room's (1 in the day room, and with no day room to measure against).
+	tint [3]float64
 }
 
 // roomFile is the picture to use for an hour and weather: the exact one, the hour's clear one, or ""
@@ -125,13 +128,15 @@ func (c *charaSet) roomAt(w, h int, now time.Time, cond string) *image.RGBA {
 			} else {
 				slog.Warn("character room not loaded", "file", path, "err", err)
 			}
+			tint := c.roomTint(scaled, w, h)
 			c.mu.Lock()
 			defer c.mu.Unlock()
 			if c.roomPending == name {
 				c.roomPending = ""
 			}
 			if scaled != nil {
-				c.room = charaRoom{name: name, size: size, img: scaled}
+				c.room = charaRoom{name: name, size: size, img: scaled, tint: tint}
+				clear(c.lit)
 			}
 		})
 	}
@@ -172,4 +177,108 @@ func (c *charaSet) roomShown() string {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.room.name
+}
+
+// roomDayClear is the room the character is drawn for: the others tint it by how their light differs.
+const roomDayClear = roomDay + "_" + roomClear + ".png"
+
+// Tint bounds: the character takes three quarters of the room's change in light, and keeps at least
+// half its brightness, so it stays readable in the darkest room.
+const (
+	tintShare = 0.75
+	tintFloor = 0.5
+)
+
+// roomTint is the tint of a room scaled to w by h, measured against the clear day room (read once).
+func (c *charaSet) roomTint(room *image.RGBA, w, h int) [3]float64 {
+	none := [3]float64{1, 1, 1}
+	if room == nil || !c.rooms[roomDayClear] {
+		return none
+	}
+	c.mu.Lock()
+	ref, ok := c.dayMean, c.dayMeasured
+	c.mu.Unlock()
+	if !ok {
+		img, err := readPNG(filepath.Join(c.dir, charaRoomsDir, roomDayClear))
+		if err != nil {
+			return none
+		}
+		ref = meanRGB(coverScale(img, w, h))
+		c.mu.Lock()
+		c.dayMean, c.dayMeasured = ref, true
+		c.mu.Unlock()
+	}
+	return tintFor(meanRGB(room), ref)
+}
+
+// tintFor is the tint of a room whose average color is m, the day room's ref.
+func tintFor(m, ref [3]float64) [3]float64 {
+	var t [3]float64
+	for k := range t {
+		r := 1.0
+		if ref[k] > 0 {
+			r = m[k] / ref[k]
+		}
+		t[k] = min(1, max(tintFloor, 1-tintShare*(1-r)))
+	}
+	return t
+}
+
+// meanRGB is a picture's average color, from every fourth pixel each way.
+func meanRGB(img *image.RGBA) [3]float64 {
+	var sum [3]float64
+	n := 0
+	b := img.Bounds()
+	for y := b.Min.Y; y < b.Max.Y; y += 4 {
+		for x := b.Min.X; x < b.Max.X; x += 4 {
+			i := img.PixOffset(x, y)
+			sum[0] += float64(img.Pix[i])
+			sum[1] += float64(img.Pix[i+1])
+			sum[2] += float64(img.Pix[i+2])
+			n++
+		}
+	}
+	if n == 0 {
+		return sum
+	}
+	return [3]float64{sum[0] / float64(n), sum[1] / float64(n), sum[2] / float64(n)}
+}
+
+// tinted is a copy of a picture with its color channels scaled by t. The pixels are premultiplied,
+// so scaling the color down alone keeps them valid.
+func tinted(src *image.RGBA, t [3]float64) *image.RGBA {
+	out := image.NewRGBA(src.Rect)
+	copy(out.Pix, src.Pix)
+	var lut [3][256]uint8
+	for k := range lut {
+		for v := range 256 {
+			lut[k][v] = uint8(float64(v)*t[k] + 0.5)
+		}
+	}
+	for i := 0; i+3 < len(out.Pix); i += 4 {
+		out.Pix[i] = lut[0][out.Pix[i]]
+		out.Pix[i+1] = lut[1][out.Pix[i+1]]
+		out.Pix[i+2] = lut[2][out.Pix[i+2]]
+	}
+	return out
+}
+
+// litIn is a picture in the room's light, made once per room and kept until the room changes: key names
+// the picture.
+func (c *charaSet) litIn(key string, src *image.RGBA) *image.RGBA {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	t := c.room.tint
+	if c.room.img == nil || t == [3]float64{1, 1, 1} || t == [3]float64{} {
+		return src
+	}
+	if img := c.lit[key]; img != nil && img.Rect == src.Rect {
+		return img
+	}
+	if c.lit == nil {
+		c.lit = map[string]*image.RGBA{}
+	}
+	img := tinted(src, t)
+	c.lit[key] = img
+	return img
 }

@@ -47,6 +47,14 @@ type charaAnim struct {
 
 	// phase is the turn phase last drawn, so a change can fire a hop.
 	phase string
+
+	// standUntil is how long the character stays standing at the front, called there by a pat or a
+	// turn, before going back to what it was doing in the room (chara_pose.go).
+	standUntil time.Time
+	// figure is the pose drawn ("" standing); figureWas and figureAt the one before it and when it
+	// changed, for the cross-fade.
+	figure, figureWas string
+	figureAt          time.Time
 }
 
 const (
@@ -205,6 +213,7 @@ func (a *charaAnim) pet(now time.Time) bool {
 		return false
 	}
 	a.petAt = now
+	a.standUntil = now.Add(charaStandFor)
 	a.hop(now, "pet")
 	a.blinkSoon(now.Add(petSmile + 160*time.Millisecond))
 	return true
@@ -262,6 +271,7 @@ func (a *charaAnim) turnPhase(now time.Time, phase string) {
 		return
 	}
 	a.phase = phase
+	a.standUntil = now.Add(charaStandFor)
 	switch phase {
 	case "listening":
 		a.hop(now, "listen")
@@ -281,6 +291,19 @@ func easeInOutSine(t float64) float64 { return -(math.Cos(math.Pi*t) - 1) / 2 }
 func easeOutBack(t float64) float64 {
 	const c1, c3 = 1.2, 2.2 // weaker than the usual 1.70158: a chibi lands, it does not spring
 	return 1 + c3*math.Pow(t-1, 3) + c1*math.Pow(t-1, 2)
+}
+
+// pose notes the figure drawn now and says how far into the cross-fade from the last one it is, 0 to 1.
+func (a *charaAnim) pose(now time.Time, name string) (was string, in float64) {
+	if name != a.figure {
+		a.figureWas, a.figure, a.figureAt = a.figure, name, now
+		a.blinkSoon(now.Add(charaPoseFade))
+	}
+	t := now.Sub(a.figureAt)
+	if a.figureAt.IsZero() || t >= charaPoseFade {
+		return name, 1
+	}
+	return a.figureWas, easeInOutSine(float64(t) / float64(charaPoseFade))
 }
 
 // say puts a line in the bubble for a moment, over the line of the hour: the name of a layout a swipe

@@ -61,6 +61,8 @@ type charaConfig struct {
 	Place string `json:"place"`
 	// Hello is the line under the name on the boot splash; empty leaves it off.
 	Hello string `json:"hello"`
+	// Poses are the ways the character spends the day in the room (chara_pose.go).
+	Poses []charaPose `json:"poses"`
 }
 
 // Expression names, as the files are named.
@@ -78,6 +80,7 @@ var charaFaces = map[string]struct{ x0, y0, x1, y1 float64 }{
 	exprEyesClosed: {0.15, 0.26, 0.85, 0.56},
 	exprHappy:      {0.12, 0.22, 0.88, 0.62},
 	exprLookup:     {0.12, 0.22, 0.88, 0.62},
+	exprPoseEyes:   {0, 0, 1, 0.7},
 }
 
 // charaPatch is an expression at the picture's own size: the changed face, feathered, and where it
@@ -97,11 +100,21 @@ type charaSet struct {
 	dir   string          // where the pictures were read from
 	rooms map[string]bool // the room pictures there (chara_room.go)
 
+	poseImg   map[string]image.Image // the poses as decoded, by name (chara_pose.go)
+	posePatch map[string]charaPatch  // their blinks
+	roomSize  image.Point            // the room picture's size, which the poses are placed in
+
 	mu          sync.Mutex
 	cache       map[image.Point]*charaScaled
 	pending     map[image.Point]bool // sizes scaledSoon is making
 	room        charaRoom            // the room in use
 	roomPending string               // the room being scaled to replace it
+	dayMean     [3]float64           // the clear day room's average color, once dayMeasured
+	dayMeasured bool
+	lit         map[string]*image.RGBA // pictures in the room's light (litIn), for the room in use
+	poseSize    image.Point            // the screen size poseCache is for
+	poseCache   map[string]*charaPoseScaled
+	posePending map[string]bool
 }
 
 // charaBreaths is how many breathing frames the standing picture has: each a little taller than the
@@ -141,7 +154,7 @@ func loadChara() *charaSet {
 		return nil
 	}
 	slog.Info("resident character loaded", "dir", charaDir, "name", set.Name, "lines", len(set.Lines),
-		"background", set.bg != nil, "rooms", len(set.rooms), "busy", set.busy != nil, "idle_expressions", len(set.idlePatch), "busy_expressions", len(set.busyPatch))
+		"background", set.bg != nil, "rooms", len(set.rooms), "poses", len(set.Poses), "busy", set.busy != nil, "idle_expressions", len(set.idlePatch), "busy_expressions", len(set.busyPatch))
 	charaCurrent.Store(set)
 	return set
 }
@@ -168,6 +181,7 @@ func loadCharaFrom(dir string) (*charaSet, error) {
 	if set.Name == "" {
 		set.Name = "Muse"
 	}
+	set.loadPoses(dir)
 	for _, e := range []string{exprEyesHalf, exprEyesClosed, exprHappy} {
 		set.loadExpression(dir, "idle_"+e+".png", e, set.idle, set.idlePatch)
 	}
