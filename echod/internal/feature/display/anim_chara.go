@@ -270,10 +270,10 @@ func (a *charaAnim) turnPhase(now time.Time, phase string) {
 	}
 }
 
-func easeInQuad(t float64) float64     { return t * t }
-func easeOutQuad(t float64) float64    { return 1 - (1-t)*(1-t) }
-func easeOutCubic(t float64) float64   { return 1 - math.Pow(1-t, 3) }
-func easeInOutSine(t float64) float64  { return -(math.Cos(math.Pi*t) - 1) / 2 }
+func easeInQuad(t float64) float64    { return t * t }
+func easeOutQuad(t float64) float64   { return 1 - (1-t)*(1-t) }
+func easeOutCubic(t float64) float64  { return 1 - math.Pow(1-t, 3) }
+func easeInOutSine(t float64) float64 { return -(math.Cos(math.Pi*t) - 1) / 2 }
 func easeOutBack(t float64) float64 {
 	const c1, c3 = 1.2, 2.2 // weaker than the usual 1.70158: a chibi lands, it does not spring
 	return 1 + c3*math.Pow(t-1, 3) + c1*math.Pow(t-1, 2)

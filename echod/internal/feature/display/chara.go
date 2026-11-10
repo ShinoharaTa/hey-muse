@@ -26,19 +26,19 @@ import (
 // and a small JSON in charaDir, put there by the owner; nothing is built in. With none there the
 // screen looks as it always has.
 //
-//   chara.json            {"name": "ポム", "lines": ["ねえ、何か用事ある？"], "place": "東京"}
-//   idle.png              the character standing, on a transparent background (required)
-//   busy.png              the character at work, for "thinking" (optional: idle is used)
-//   background.png        the room behind everything on the idle page (optional: frosted glass instead)
+//	chara.json            {"name": "ポム", "lines": ["ねえ、何か用事ある？"], "place": "東京"}
+//	idle.png              the character standing, on a transparent background (required)
+//	busy.png              the character at work, for "thinking" (optional: idle is used)
+//	background.png        the room behind everything on the idle page (optional: frosted glass instead)
 //
 // Expressions are optional edits of those two pictures, same pose and framing, with only the face
 // changed (anim_chara.go says when each shows):
 //
-//   idle_eyes_half.png    eyelids halfway down, the middle of a blink
-//   idle_eyes_closed.png  eyes closed, the blink itself
-//   idle_happy.png        the smile for a pat on the head
-//   busy_eyes_closed.png  the blink while at work
-//   busy_lookup.png       looking up, pondering
+//	idle_eyes_half.png    eyelids halfway down, the middle of a blink
+//	idle_eyes_closed.png  eyes closed, the blink itself
+//	idle_happy.png        the smile for a pat on the head
+//	busy_eyes_closed.png  the blink while at work
+//	busy_lookup.png       looking up, pondering
 //
 // Only the face is kept from an edit: the pixels that differ from the base, inside a box around the
 // face, feathered at the edge. An edit that moved the pose is dropped, since a face that jumps is
