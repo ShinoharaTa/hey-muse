@@ -63,7 +63,7 @@ func pinCharaView(t *testing.T, v charaView) {
 // TestCharaScenesDraw draws the character's pages, and writes them as PNGs when SHOW_PREVIEW names a
 // directory, the way TestShowScenesDraw does.
 func TestCharaScenesDraw(t *testing.T) {
-	pinCharaView(t, charaView{})
+	pinCharaView(t, charaView{Layout: layoutStandard})
 	at := time.Date(2026, 11, 7, 14, 50, 0, 0, time.Local)
 	c := testChara()
 	week := []hass.Day{

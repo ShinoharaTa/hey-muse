@@ -486,19 +486,7 @@ func (r *renderer) charaFurnitureAlt(s scene, layout, date string, rect func(x, 
 		}
 		r.charaPill(s, 30, 418, 300)
 	case layoutClock:
-		text(190, true, s.now.Format("15:04"), 36, 250, ink)
-		text(32, false, date, 46, 304, muted)
-		if sky != "" {
-			b := rect(40, 330, 520, 64)
-			r.glassTile(b, 16)
-			if okToday {
-				r.weatherIcon(today.Condition, r.s(78), r.s(362), r.s(40))
-			}
-			f := r.styleFace(false, 24)
-			r.shadowText(f, r.fit(f, sky, r.s(430)), r.s(116), r.s(371), ink)
-			zones = append(zones, homeZone{b, "weather"})
-		}
-		r.charaPill(s, 40, 412, 520)
+		zones = r.drawClockAgenda(s, date, rect, text)
 	}
 	r.charaZones = zones
 }

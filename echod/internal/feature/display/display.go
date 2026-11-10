@@ -2105,6 +2105,10 @@ func (d *Display) frame() time.Duration {
 	s.forecast = home.Get().Forecast()
 	s.forecastAt = home.Get().ForecastUpdated()
 	s.weatherPlace = config.Get().Home.Place.Name
+	if s.chara != nil {
+		s.hours = home.Get().Hours(now)
+		s.agenda = agendaNow(now)
+	}
 	s.style = styleFactsFor(clockStyle(), now)
 	s.style.named = d.styleName(now)
 	d.calendarScene(&s, now)

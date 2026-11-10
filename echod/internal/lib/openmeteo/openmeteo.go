@@ -112,6 +112,20 @@ func FindIn(ctx context.Context, name, country, lang string) ([]Place, error) {
 
 // Forecast is the weather now and the next days (today first) at a place.
 func Forecast(ctx context.Context, lat, lon float64, fahrenheit bool, days int) (Now, []Day, error) {
+	now, ds, _, err := ForecastHours(ctx, lat, lon, fahrenheit, days, 0)
+	return now, ds, err
+}
+
+// Hour is one hour of the hourly forecast.
+type Hour struct {
+	When      time.Time
+	Condition string
+	Temp      float64
+	Rain      int // precipitation probability, percent, -1 when not given
+}
+
+// ForecastHours is Forecast with the next hours too, hour by hour from the one under way (none for 0).
+func ForecastHours(ctx context.Context, lat, lon float64, fahrenheit bool, days, hours int) (Now, []Day, []Hour, error) {
 	unit := "celsius"
 	if fahrenheit {
 		unit = "fahrenheit"
@@ -124,6 +138,10 @@ func Forecast(ctx context.Context, lat, lon float64, fahrenheit bool, days int) 
 		"temperature_unit": {unit},
 		"timezone":         {"auto"},
 		"forecast_days":    {strconv.Itoa(days)},
+	}
+	if hours > 0 {
+		q.Set("hourly", "temperature_2m,weather_code,precipitation_probability,is_day")
+		q.Set("forecast_hours", strconv.Itoa(hours))
 	}
 	var out struct {
 		Current struct {
@@ -138,9 +156,16 @@ func Forecast(ctx context.Context, lat, lon float64, fahrenheit bool, days int) 
 			Min  []float64  `json:"temperature_2m_min"`
 			Rain []*float64 `json:"precipitation_probability_max"`
 		} `json:"daily"`
+		Hourly struct {
+			Time  []string   `json:"time"`
+			Temp  []float64  `json:"temperature_2m"`
+			Code  []int      `json:"weather_code"`
+			Rain  []*float64 `json:"precipitation_probability"`
+			IsDay []int      `json:"is_day"`
+		} `json:"hourly"`
 	}
 	if err := get(ctx, forecastURL, q, &out); err != nil {
-		return Now{}, nil, err
+		return Now{}, nil, nil, err
 	}
 	now := Now{Condition: Condition(out.Current.Code, out.Current.IsDay == 1), Temp: out.Current.Temp}
 	d := out.Daily
@@ -159,7 +184,25 @@ func Forecast(ctx context.Context, lat, lon float64, fahrenheit bool, days int) 
 		}
 		ds = append(ds, Day{When: when, Condition: Condition(d.Code[i], true), High: d.Max[i], Low: d.Min[i], Rain: rain})
 	}
-	return now, ds, nil
+	h := out.Hourly
+	var hs []Hour
+	for i, t := range h.Time {
+		if i >= len(h.Temp) || i >= len(h.Code) {
+			break
+		}
+		// The times are local to the place ("timezone": "auto"), which is the device's own zone.
+		when, err := time.ParseInLocation("2006-01-02T15:04", t, time.Local)
+		if err != nil {
+			continue
+		}
+		rain := -1
+		if i < len(h.Rain) && h.Rain[i] != nil {
+			rain = int(*h.Rain[i])
+		}
+		day := i >= len(h.IsDay) || h.IsDay[i] == 1
+		hs = append(hs, Hour{When: when, Condition: Condition(h.Code[i], day), Temp: h.Temp[i], Rain: rain})
+	}
+	return now, ds, hs, nil
 }
 
 // Condition is a WMO weather code as Home Assistant names the condition, which is what the screen draws.

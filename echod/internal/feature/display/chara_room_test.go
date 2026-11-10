@@ -111,7 +111,7 @@ func TestCharaRoomsPreview(t *testing.T) {
 	if src == "" || out == "" {
 		t.Skip("CHARA_DIR and SHOW_PREVIEW not set")
 	}
-	pinCharaView(t, charaView{})
+	pinCharaView(t, charaView{Layout: layoutStandard})
 	c, err := loadCharaFrom(src)
 	if err != nil {
 		t.Fatal(err)

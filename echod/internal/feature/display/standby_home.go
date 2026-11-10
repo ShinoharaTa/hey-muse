@@ -188,6 +188,10 @@ func (d *Display) tapStandby(at image.Point) bool {
 	case "radio":
 		d.openDrawer(drawerRadio)
 		return true
+	case "calendar":
+		// The clock layout's calendar: the month, or nothing with no calendar chosen.
+		d.OpenCalendar()
+		return true
 	case "settings":
 		if !d.OpenSheet("general") {
 			d.showSheet(true)
