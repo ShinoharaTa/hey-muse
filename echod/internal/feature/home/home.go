@@ -136,6 +136,7 @@ type Feature struct {
 	// Home Assistant; ownAt is when.
 	own   openmeteo.Now
 	ownAt time.Time
+	hours []openmeteo.Hour // the hourly forecast with own
 
 	poke chan struct{}
 

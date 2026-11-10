@@ -49,3 +49,33 @@ func TestForecastReadsTheAnswer(t *testing.T) {
 		t.Errorf("days = %+v", days)
 	}
 }
+
+// TestForecastHoursReadsTheHours asks for the hours only when wanted, and reads them with their night
+// form after dark and no probability where none is given.
+func TestForecastHoursReadsTheHours(t *testing.T) {
+	var asked string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		asked = r.URL.Query().Get("hourly") + "|" + r.URL.Query().Get("forecast_hours")
+		w.Write([]byte(`{"current":{"temperature_2m":11.9,"weather_code":3,"is_day":1},
+			"daily":{"time":["2026-11-10"],"weather_code":[61],"temperature_2m_max":[13],"temperature_2m_min":[7],"precipitation_probability_max":[90]},
+			"hourly":{"time":["2026-11-10T15:00","2026-11-10T18:00"],"temperature_2m":[12.0,11.1],"weather_code":[3,0],"precipitation_probability":[10,null],"is_day":[1,0]}}`))
+	}))
+	defer srv.Close()
+	old := forecastURL
+	forecastURL = srv.URL
+	defer func() { forecastURL = old }()
+	_, days, hours, err := ForecastHours(t.Context(), 35.9, 139.6, false, 1, 24)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if asked != "temperature_2m,weather_code,precipitation_probability,is_day|24" || len(days) != 1 {
+		t.Fatalf("asked %q, %d days", asked, len(days))
+	}
+	if len(hours) != 2 || hours[0].When.Hour() != 15 || hours[0].Rain != 10 || hours[0].Condition != "cloudy" ||
+		hours[1].Condition != "clear-night" || hours[1].Rain != -1 || hours[1].Temp != 11.1 {
+		t.Fatalf("hours %+v", hours)
+	}
+	if _, _, err := Forecast(t.Context(), 35.9, 139.6, false, 1); err != nil || asked != "|" {
+		t.Fatalf("Forecast asked for hours: %q %v", asked, err)
+	}
+}
