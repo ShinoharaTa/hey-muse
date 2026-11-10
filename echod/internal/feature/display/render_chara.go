@@ -131,14 +131,28 @@ func (r *renderer) charaFloorAt(sc *charaScaled, layout string) (x, floor int) {
 
 // charaSized is the character at the size a layout draws it: large in the character's layout, small
 // in the clock's. Each size is scaled once and kept (charaSet.scaled).
-func (c *charaSet) charaSized(w, h int, layout string) *charaScaled {
+// Until that size is ready the standard one stands in.
+func (c *charaSet) charaSized(w, h int, layout string) (sc *charaScaled, ready bool) {
 	switch layout {
 	case layoutChara:
-		return c.scaled(w, h*100/86)
+		sc = c.scaledSoon(w, h*94/86)
 	case layoutClock:
-		return c.scaled(w, h*52/86)
+		sc = c.scaledSoon(w, h*52/86)
+	default:
+		return c.scaled(w, h), true
 	}
-	return c.scaled(w, h)
+	if sc == nil {
+		return c.scaled(w, h), false
+	}
+	return sc, true
+}
+
+// charaWarm starts scaling the character for every layout, so the first swipe to one is not kept
+// waiting.
+func (c *charaSet) charaWarm(w, h int) {
+	for _, l := range layouts {
+		c.charaSized(w, h, l)
+	}
 }
 
 // charaFurnitureKey is what the idle page's furniture depends on.
@@ -156,7 +170,14 @@ func charaFurnitureKey(s scene) string {
 func (r *renderer) drawCharaHome(s scene) {
 	c := s.chara
 	layout := charaViewGet().layout()
-	sc := c.charaSized(r.w, r.h, layout)
+	sc, ready := c.charaSized(r.w, r.h, layout)
+	if !ready {
+		r.wantFrame(250 * time.Millisecond)
+	}
+	if r.charaWarmed != c {
+		r.charaWarmed = c
+		c.charaWarm(r.w, r.h)
+	}
 	now := s.now
 	night := nightNow(now)
 
@@ -236,8 +257,12 @@ func (r *renderer) drawCharaHome(s scene) {
 		f := r.styleFace(false, 22)
 		w := min(r.width(f, line)+r.s(44), r.s(400))
 		line = r.fit(f, line, w-r.s(44))
-		x1 := r.w - r.s(30)
-		top := r.s(26) + int(float64(r.s(6))*(1-rise))
+		x1, top0 := r.w-r.s(30), r.s(26)
+		if layout == layoutChara {
+			// Beside the large character's head, under the weather, rather than over its hair.
+			x1, top0 = r.s(30)+w, r.s(236)
+		}
+		top := top0 + int(float64(r.s(6))*(1-rise))
 		bb := image.Rect(x1-w, top, x1, top+r.s(50))
 		r.roundFill(bb, float64(r.s(25)), charaInk.bubble, charaInk.bubble)
 		r.text(f, line, bb.Min.X+r.s(22), top+r.s(34), charaInk.bubbleText)
