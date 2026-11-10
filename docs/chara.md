@@ -65,9 +65,9 @@
 
 ```json
 "poses": [
-  {"name": "study",  "x": 1255, "y": 778, "h": 414, "hours": ["morning", "day", "night"], "lines": ["いま勉強中…"]},
-  {"name": "coffee", "x": 1255, "y": 775, "h": 408, "hours": ["dawn", "morning", "evening"]},
-  {"name": "relax",  "x": 965,  "y": 940, "h": 414, "hours": ["evening", "night"]}
+  {"name": "study",  "x": 1255, "y": 807, "h": 530, "hours": ["morning", "day", "night"], "lines": ["いま勉強中…"]},
+  {"name": "coffee", "x": 1255, "y": 804, "h": 522, "hours": ["dawn", "morning", "evening"]},
+  {"name": "relax",  "x": 970,  "y": 985, "h": 535, "hours": ["evening", "night"]}
 ]
 ```
 
