@@ -56,6 +56,7 @@ type Muse struct {
 
 // Speech is what voices Muse's answers (lib/speech). Empty Base, Model and Voice are the library's
 // defaults. Key is a secret, never shown again once saved; without one the device's own voice speaks.
+// Gateway is the owner's tts-gateway server, which speaks when it is chosen or no voice is.
 type Speech struct {
 	Base  string `json:"base,omitempty"`
 	Model string `json:"model,omitempty"`
@@ -64,6 +65,13 @@ type Speech struct {
 	// Style is how to say it, in words, for a model that takes instructions.
 	Style string `json:"style,omitempty"`
 	Key   string `json:"key,omitempty"`
+
+	// Gateway is a tts-gateway's address, like http://192.168.1.20:8710; empty for none.
+	Gateway string `json:"gateway,omitempty"`
+	// GatewayVoice is one of its voices by id; empty is the server's default.
+	GatewayVoice string `json:"gateway_voice,omitempty"`
+	// GatewayToken is its TTS_TOKEN, a secret like Key; empty sends none.
+	GatewayToken string `json:"gateway_token,omitempty"`
 }
 
 type BrainMode string
@@ -91,9 +99,9 @@ type BrainWriter struct{ st *Store }
 // key as "set" and posts nothing for it must not clear it.
 func (w BrainWriter) Set(b Brain) error {
 	return w.st.Update(func(c *Config) {
-		key, sdk, speech := c.Brain.Key, c.Brain.Muse.SDKToken, c.Brain.Muse.Speech.Key
+		key, sdk, speech, gateway := c.Brain.Key, c.Brain.Muse.SDKToken, c.Brain.Muse.Speech.Key, c.Brain.Muse.Speech.GatewayToken
 		c.Brain = b
-		c.Brain.Key, c.Brain.Muse.SDKToken, c.Brain.Muse.Speech.Key = key, sdk, speech
+		c.Brain.Key, c.Brain.Muse.SDKToken, c.Brain.Muse.Speech.Key, c.Brain.Muse.Speech.GatewayToken = key, sdk, speech, gateway
 	})
 }
 
@@ -113,6 +121,10 @@ func (w BrainWriter) SetSDKToken(token string) error {
 
 func (w BrainWriter) SetSpeechKey(key string) error {
 	return w.st.Update(func(c *Config) { c.Brain.Muse.Speech.Key = key })
+}
+
+func (w BrainWriter) SetGatewayToken(token string) error {
+	return w.st.Update(func(c *Config) { c.Brain.Muse.Speech.GatewayToken = token })
 }
 
 // SetSpeechVoice is SetVoice for Muse's speech: the voice alone, from the screen.

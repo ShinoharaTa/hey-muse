@@ -24,7 +24,7 @@ import (
 // For the direct pipeline the list is the speech server's own, asked for in the background: the card
 // is drawn many times a second and cannot wait on the network. Until it arrives, or when the server
 // does not answer, a short list of common Piper voices stands in. For Muse it is the built-in voice
-// and then the endpoint's fixed few (museVoices).
+// and the tts-gateway when it has an address, then the endpoint's fixed few (museVoices).
 
 // voicesFresh is how long a list from the server is used before it is asked again.
 const voicesFresh = 10 * time.Minute
@@ -157,17 +157,15 @@ func voiceLabel(name string) string {
 
 // museVoice is the voice Muse's answers are said in.
 func museVoice(b config.Brain) speech.Voice {
-	return speech.Chosen(b.Muse.Speech.Voice, b.Muse.Speech.Key)
+	s := b.Muse.Speech
+	return speech.Chosen(s.Voice, s.Key, s.Gateway != "")
 }
 
-// museVoices is what the picker offers for Muse: the built-in voice first, then the endpoint's. With
-// no speech key only the built-in one can speak, so it is the only one offered: a voice that could
-// be tapped and then not heard would look broken.
+// museVoices is what the picker offers for Muse: the built-in voice first, then the tts-gateway's
+// when it has an address, then the endpoint's when it has a key. Only voices that can speak are
+// offered: one that could be tapped and then not heard would look broken.
 func museVoices(b config.Brain) []speech.Voice {
-	if b.Muse.Speech.Key == "" {
-		return []speech.Voice{speech.BuiltIn}
-	}
-	return speech.Choices()
+	return speech.Offered(b.Muse.Speech.Key != "", b.Muse.Speech.Gateway != "")
 }
 
 // voiceRow is the Sound card's Speaking voice row.

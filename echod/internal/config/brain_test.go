@@ -11,7 +11,7 @@ import (
 func TestBrainSetKeepsTheSecrets(t *testing.T) {
 	st := load(t)
 	w := st.Set().Brain()
-	for _, err := range []error{w.SetKey("llm-key"), w.SetSDKToken("mgst_token"), w.SetSpeechKey("sk-speech")} {
+	for _, err := range []error{w.SetKey("llm-key"), w.SetSDKToken("mgst_token"), w.SetSpeechKey("sk-speech"), w.SetGatewayToken("gw-token")} {
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -20,7 +20,7 @@ func TestBrainSetKeepsTheSecrets(t *testing.T) {
 		t.Fatal(err)
 	}
 	b := st.Get().Brain
-	if b.Key != "llm-key" || b.Muse.SDKToken != "mgst_token" || b.Muse.Speech.Key != "sk-speech" {
+	if b.Key != "llm-key" || b.Muse.SDKToken != "mgst_token" || b.Muse.Speech.Key != "sk-speech" || b.Muse.Speech.GatewayToken != "gw-token" {
 		t.Errorf("Set changed a secret: %+v", b)
 	}
 	if b.Mode != BrainMuse || b.Muse.Speech.Voice != "coral" {

@@ -47,7 +47,7 @@ func TestSaveBrainMuseNeedsItsSecrets(t *testing.T) {
 		t.Fatalf("saved %+v", b)
 	}
 	body := get(f, "/setup?tab=sound", c).Body.String()
-	for _, want := range []string{`<option value="builtin" selected>Built in</option><option value="alloy">`, "answers use the built-in voice"} {
+	for _, want := range []string{`<option value="builtin" selected>Built in</option><option value="gateway">tts-gateway</option><option value="alloy">`, "answers use the built-in voice"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("with no speech key the sound tab lacks %q", want)
 		}
@@ -151,5 +151,49 @@ func TestMusePairingPanelAndState(t *testing.T) {
 	}
 	if st := get(f, "/setup/state", nil).Body.String(); strings.Contains(st, "muse") {
 		t.Errorf("state for a stranger says %s", st)
+	}
+}
+
+// The tts-gateway is set up on the same form: its address and voice are kept as they are, its token
+// as a secret, and with no voice chosen it is the one that speaks, even on an image with no voice of
+// its own.
+func TestSaveBrainMuseTakesTheGateway(t *testing.T) {
+	f, c := in(t)
+	has(t, false)
+	v := url.Values{"what": {"brain"}, "tab": {"sound"}, "mode": {"muse"}, "sdk": {"mgst_abc"}}
+	if to := post(t, f, c, v); !strings.Contains(to.Query().Get("problem"), "tts-gateway") {
+		t.Fatalf("Muse with nothing to speak was saved: %q", to.Query().Get("problem"))
+	}
+	v.Set("gateway", "http://192.168.1.20:8710/")
+	v.Set("gatewayvoice", "kikka")
+	v.Set("gatewaytoken", "gw-1")
+	if to := post(t, f, c, v); to.Query().Get("problem") != "" {
+		t.Fatalf("saving the gateway: %q", to.Query().Get("problem"))
+	}
+	s := config.Get().Brain.Muse.Speech
+	if s.Gateway != "http://192.168.1.20:8710" || s.GatewayVoice != "kikka" || s.GatewayToken != "gw-1" {
+		t.Fatalf("saved %+v", s)
+	}
+	body := get(f, "/setup?tab=sound", c).Body.String()
+	for _, want := range []string{`<option value="gateway" selected>tts-gateway</option>`, `value="http://192.168.1.20:8710"`, "ZEN-TTS"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("the sound tab lacks %q", want)
+		}
+	}
+	if strings.Contains(body, "gw-1") {
+		t.Error("the sound tab shows the gateway token")
+	}
+
+	v.Del("gatewaytoken")
+	v.Set("nogatewaytoken", "yes")
+	if to := post(t, f, c, v); to.Query().Get("problem") != "" {
+		t.Fatalf("removing the gateway token: %q", to.Query().Get("problem"))
+	}
+	if s = config.Get().Brain.Muse.Speech; s.GatewayToken != "" || s.Gateway == "" {
+		t.Errorf("after removing the token: %+v", s)
+	}
+	v.Set("gateway", "192.168.1.20:8710")
+	if to := post(t, f, c, v); to.Query().Get("problem") == "" {
+		t.Error("a gateway that is not an address was saved")
 	}
 }
