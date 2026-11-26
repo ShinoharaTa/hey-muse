@@ -21,6 +21,9 @@ who answers. Everything else about the device is TECHO5's, and its own README is
   then shows up in the Muse app's device list like any Muse gadget.
 - **A voice with no server at home.** Answers are spoken through an OpenAI-style speech endpoint, or
   by a built-in voice (SVOX Pico) that needs no key and no internet.
+- **Japanese speech from your own server.** Answers can be spoken by
+  [tts-gateway](https://github.com/ShinoharaTa/tts-gateway) running ZEN-TTS on a machine at home.
+  See [docs/muse.md](docs/muse.md#choose-a-voice).
 - **Japanese speech recognition.** Use Moonshine tiny or base on Echo Show 5, or Whisper on a PC.
   [Set up recognition and switch models](tools/echo-asr/README.md).
 - **A "Hey Muse" wake word,** beside TECHO5's own, chosen on the device.
@@ -110,6 +113,12 @@ An answer took 7 to 11 seconds from the end of the question, most of it Muse thi
 - Meta's [Muse Gadget SDK](https://github.com/facebookincubator/muse-gadget-sdk), Apache 2.0. The
   Muse client and the pairing code here are ports of it.
 - SVOX Pico, Apache 2.0, for the built-in voice.
+- **音声合成：ZEN-TTS（[https://zenryokukikai.com](https://zenryokukikai.com)）** — Speech synthesis:
+  ZEN-TTS. The Japanese voice, when answers are spoken through tts-gateway. ZEN-TTS and its voices
+  are under the [ZEN-TTS License](https://github.com/zenryokukikai/zen-tts/blob/v1.3.0/LICENSE.md),
+  not this repository's, and are not included here.
+- [tts-gateway](https://github.com/ShinoharaTa/tts-gateway) by ShinoharaTa, MIT: the HTTP server
+  that runs ZEN-TTS for the device. Not part of this repository.
 
 [NOTICE](NOTICE) lists everything and its license.
 
