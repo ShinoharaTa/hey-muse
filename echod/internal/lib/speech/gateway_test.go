@@ -7,10 +7,12 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"reflect"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 // testWAV is samples as the gateway sends them: RIFF, a fmt chunk, a chunk to skip, then data.
@@ -194,5 +196,42 @@ func TestSpeakerUsesTheGateway(t *testing.T) {
 	})
 	if err != nil || n != 5 {
 		t.Fatalf("err %v, %d samples", err, n)
+	}
+}
+
+// TestGatewayLive asks a real tts-gateway, named by TTS_GATEWAY with its token in TTS_GATEWAY_TOKEN
+// and a voice in TTS_GATEWAY_VOICE, and writes what it said to SPEECH_OUT as raw 16 kHz PCM when that
+// names a file. Without TTS_GATEWAY it is skipped.
+func TestGatewayLive(t *testing.T) {
+	base := os.Getenv("TTS_GATEWAY")
+	if base == "" {
+		t.Skip("TTS_GATEWAY is not set")
+	}
+	g := Gateway{Base: base, Token: os.Getenv("TTS_GATEWAY_TOKEN"), Voice: os.Getenv("TTS_GATEWAY_VOICE")}
+	var got []int16
+	start := time.Now()
+	var first time.Duration
+	err := g.Speak(context.Background(), "こんにちは、ポムだよ。今日もよろしくね！", func(s []int16) error {
+		if first == 0 {
+			first = time.Since(start)
+		}
+		got = append(got, s...)
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("%.1f s of speech, first audio after %v, all after %v", float64(len(got))/GatewayRate, first, time.Since(start))
+	if len(got) < GatewayRate {
+		t.Fatalf("only %d samples", len(got))
+	}
+	if out := os.Getenv("SPEECH_OUT"); out != "" {
+		raw := make([]byte, 0, 2*len(got))
+		for _, s := range got {
+			raw = binary.LittleEndian.AppendUint16(raw, uint16(s))
+		}
+		if err := os.WriteFile(out, raw, 0o644); err != nil {
+			t.Fatal(err)
+		}
 	}
 }
