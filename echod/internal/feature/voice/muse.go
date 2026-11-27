@@ -143,10 +143,17 @@ func (m *viaMuse) Ready() bool {
 // who was heard whether to say it again, wait, or go and pair the device.
 func (m *viaMuse) Excuse() string {
 	if !m.link.Paired() {
-		return "This device is not paired with Muse yet."
+		return museUnpaired
 	}
-	return "I can't reach Muse right now."
+	return museUnreachable
 }
+
+// museUnpaired and museUnreachable are Muse's excuses, in English for the built-in voice; excuses has
+// them in the languages the tts-gateway speaks.
+const (
+	museUnpaired    = "This device is not paired with Muse yet."
+	museUnreachable = "I can't reach Muse right now."
+)
 
 // End hands the utterance over to be answered, off the send queue as direct does: Muse takes
 // seconds to answer, and the next turn's start must not wait behind it.
@@ -165,18 +172,20 @@ func (m *viaMuse) End() error {
 // screen is the next answer's.
 func museVoice() speech.Voice {
 	s := config.Get().Brain.Muse.Speech
-	return speech.Chosen(s.Voice, s.Key)
+	return speech.Chosen(s.Voice, s.Key, s.Gateway != "")
 }
 
-// speakMuse says text in voice v: through the endpoint the settings name, or in the device's own.
+// speakMuse says text in voice v: through the endpoint or the tts-gateway the settings name, or in
+// the device's own.
 func speakMuse(ctx context.Context, v speech.Voice, text string, out func(samples []int16) error) error {
 	if played, err := speakHomeReply(ctx, text, out); played {
 		return err
 	}
 	s := config.Get().Brain.Muse.Speech
 	return speech.Speaker{
-		Cloud: speech.Client{Base: s.Base, Key: s.Key, Model: s.Model, Style: s.Style},
-		Local: speech.Installed(),
+		Cloud:   speech.Client{Base: s.Base, Key: s.Key, Model: s.Model, Style: s.Style},
+		Gateway: speech.Gateway{Base: s.Gateway, Token: s.GatewayToken, Voice: s.GatewayVoice},
+		Local:   speech.Installed(),
 	}.Speak(ctx, v, text, out)
 }
 

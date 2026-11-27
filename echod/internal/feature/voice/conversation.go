@@ -2,6 +2,7 @@ package voice
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"math"
 	"strings"
@@ -954,12 +955,16 @@ func (c *conversation) trouble() {
 // excusing is set while an excuse is being said, so that asking again does not stack another on it.
 var excusing atomic.Bool
 
-// excuse says why a turn could not start, in the device's own voice, which needs no connection, and
-// reports whether it will: not in quiet hours, where a failure waits for morning as its tone does, and
-// not on an image with no voice of its own. Then the tone is what there is.
+// excuse says why a turn could not start, and reports whether it will: not in quiet hours, where a
+// failure waits for morning as its tone does. It is said by the tts-gateway when that is the voice
+// chosen, in the screen's language where there is a translation (excuseIn), since the gateway is on
+// the home network and needs no Muse. Otherwise, or when the gateway fails, the device's own voice
+// says it in English, which is all it can say, and needs no connection at all; on an image with no
+// voice of its own the tone is what there is.
 func (c *conversation) excuse(text string) bool {
-	voice := speech.Installed()
-	if text == "" || config.Quiet() || !voice.Available() {
+	builtIn := speech.Installed()
+	gateway := museVoice() == speech.ByGateway
+	if text == "" || config.Quiet() || (!gateway && !builtIn.Available()) {
 		return false
 	}
 	if !excusing.CompareAndSwap(false, true) {
@@ -970,10 +975,20 @@ func (c *conversation) excuse(text string) bool {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		var samples []int16
-		err := voice.Speak(ctx, text, func(s []int16) error {
+		keep := func(s []int16) error {
 			samples = append(samples, s...)
 			return nil
-		})
+		}
+		err := errors.New("no voice")
+		if gateway {
+			if err = speakMuse(ctx, speech.ByGateway, excuseIn(text, config.Get().Screen.Language), keep); err != nil {
+				slog.Warn("saying why the turn did not start through the tts-gateway failed", "err", err)
+				samples = samples[:0]
+			}
+		}
+		if err != nil && builtIn.Available() {
+			err = builtIn.Speak(ctx, text, keep)
+		}
 		if err != nil || len(samples) == 0 {
 			slog.Warn("saying why the turn did not start failed", "err", err)
 			c.trouble()
@@ -987,6 +1002,22 @@ func (c *conversation) excuse(text string) bool {
 		<-claim.Done()
 	})
 	return true
+}
+
+// excuses are what the English excuses are in the languages the tts-gateway speaks.
+var excuses = map[string]map[string]string{
+	"ja": {
+		museUnpaired:    "まだ Muse アプリとペアリングしていないみたい。設定からペアリングしてね。",
+		museUnreachable: "いま Muse につながらないみたい。少し待ってからもう一度呼んでね。",
+	},
+}
+
+// excuseIn is an excuse in language lang, or as it is where there is no translation.
+func excuseIn(text, lang string) string {
+	if t, ok := excuses[lang][text]; ok {
+		return t
+	}
+	return text
 }
 
 // phraseFor is what Home Assistant expects a turn to report for one of its wake word slots: the

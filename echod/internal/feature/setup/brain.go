@@ -92,8 +92,8 @@ func brainSection(w http.ResponseWriter, token string) {
 	fmt.Fprint(w, `<p class="note"><strong>Muse</strong> answers through Meta's Muse, which hears what was
 	 said and answers as itself, and can set this device's timers and alarms, play its radio and stop it. It
 	 needs a developer's SDK token from gadgets.muse.ai and the device paired with the Muse app (below). Muse
-	 answers in words, which the device says in its built-in voice, or in a speech endpoint's with a speech
-	 key.</p>
+	 answers in words, which the device says in its built-in voice, in the owner's tts-gateway's, or in a
+	 speech endpoint's with a speech key.</p>
 	 <label for="sdk">Muse SDK token</label>`)
 	fmt.Fprintf(w, `<input id="sdk" name="sdk" type="password" value="" placeholder="%s" autocomplete="off">
 	 <p><label><input type="checkbox" name="nosdk" value="yes" style="width:auto"> Remove the SDK token</label></p>
@@ -102,7 +102,7 @@ func brainSection(w http.ResponseWriter, token string) {
 	 <p><label><input type="checkbox" name="nospeechkey" value="yes" style="width:auto"> Remove the speech key</label></p>
 	 <label for="speechvoice">Speaking voice</label>
 	 <select id="speechvoice" name="speechvoice">`, keyHint(m.SDKToken != ""), keyHint(m.Speech.Key != ""))
-	chosen := speech.Chosen(m.Speech.Voice, m.Speech.Key)
+	chosen := speech.Chosen(m.Speech.Voice, m.Speech.Key, m.Speech.Gateway != "")
 	for _, v := range speech.Choices() {
 		fmt.Fprintf(w, `<option value="%s"%s>%s</option>`, v, selected(v == chosen), v.Label())
 	}
@@ -110,9 +110,23 @@ func brainSection(w http.ResponseWriter, token string) {
 	switch {
 	case !builtInVoice():
 		fmt.Fprint(w, `<p class="note">This image has no built-in voice, so Muse needs a speech key to answer aloud.</p>`)
-	case m.Speech.Key == "":
-		fmt.Fprint(w, `<p class="note">With no speech key, Muse's answers use the built-in voice.</p>`)
+	case m.Speech.Key == "" && m.Speech.Gateway == "":
+		fmt.Fprint(w, `<p class="note">With no tts-gateway and no speech key, Muse's answers use the built-in voice.</p>`)
 	}
+	fmt.Fprintf(w, `
+	 <label for="gateway">tts-gateway address</label>
+	 <input id="gateway" name="gateway" value="%s" placeholder="http://192.168.1.20:8710" autocomplete="off">
+	 <label for="gatewayvoice">tts-gateway voice</label>
+	 <input id="gatewayvoice" name="gatewayvoice" value="%s" placeholder="the server's default" maxlength="64" autocomplete="off">
+	 <label for="gatewaytoken">tts-gateway token</label>
+	 <input id="gatewaytoken" name="gatewaytoken" type="password" value="" placeholder="%s" autocomplete="off">
+	 <p><label><input type="checkbox" name="nogatewaytoken" value="yes" style="width:auto"> Remove the tts-gateway token</label></p>
+	 <p class="note"><a href="https://github.com/ShinoharaTa/tts-gateway">tts-gateway</a> makes Japanese speech
+	  on a machine of your own. With an address and no voice chosen above, it speaks Muse's answers; when it
+	  cannot be reached, the built-in voice does. The voice is one of its ids (GET /v1/engines). The token is
+	  its TTS_TOKEN, if it has one. %s</p>`,
+		html.EscapeString(m.Speech.Gateway), html.EscapeString(m.Speech.GatewayVoice), keyHint(m.Speech.GatewayToken != ""),
+		html.EscapeString(speech.GatewayCredit))
 	fmt.Fprintf(w, `
 	 <label for="speechstyle">How to say it</label>
 	 <input id="speechstyle" name="speechstyle" value="%s" placeholder="warmly, and not too fast" maxlength="500" autocomplete="off">
@@ -277,6 +291,9 @@ func saveBrain(r *http.Request) string {
 			Model: v("speechmodel"),
 			Voice: v("speechvoice"),
 			Style: v("speechstyle"),
+
+			Gateway:      strings.TrimRight(v("gateway"), "/"),
+			GatewayVoice: v("gatewayvoice"),
 		}},
 	}
 	if b.Mode != config.BrainHomeAssistant && b.Mode != config.BrainDirect && b.Mode != config.BrainMuse {
@@ -294,6 +311,7 @@ func saveBrain(r *http.Request) string {
 		{"the chat model endpoint", b.LLM, "http://192.168.1.20:8080/v1"},
 		{"the search server", b.Search, "http://192.168.1.20:8888"},
 		{"the speech endpoint", b.Muse.Speech.Base, speech.DefaultBase},
+		{"the tts-gateway", b.Muse.Speech.Gateway, "http://192.168.1.20:8710"},
 	} {
 		if u.v == "" {
 			continue
@@ -306,7 +324,7 @@ func saveBrain(r *http.Request) string {
 	if b.Mode == config.BrainDirect && (b.STT == "" || b.TTS == "" || b.LLM == "") {
 		return "answering directly needs all three: speech to text, text to speech and the chat model"
 	}
-	if strings.ContainsAny(b.Voice+b.Language+b.Model+b.Muse.Speech.Model+b.Muse.Speech.Style, "\r\n") {
+	if strings.ContainsAny(b.Voice+b.Language+b.Model+b.Muse.Speech.Model+b.Muse.Speech.Style+b.Muse.Speech.GatewayVoice, "\r\n") {
 		return "the voice, language, model and how to say it are one line each"
 	}
 	if b.Muse.Speech.Voice != "" && !slices.Contains(speech.Choices(), speech.Voice(b.Muse.Speech.Voice)) {
@@ -316,8 +334,10 @@ func saveBrain(r *http.Request) string {
 	// A secret posted is a secret to write, one ticked away is one to clear, and nothing posted keeps
 	// what is there: which is what Muse's own have to be checked against before anything is saved.
 	type secret struct{ field, remove, what string }
-	secrets := []secret{{"key", "nokey", "key"}, {"sdk", "nosdk", "SDK token"}, {"speechkey", "nospeechkey", "speech key"}}
-	willHave := map[string]bool{"key": was.Key != "", "sdk": was.Muse.SDKToken != "", "speechkey": was.Muse.Speech.Key != ""}
+	secrets := []secret{{"key", "nokey", "key"}, {"sdk", "nosdk", "SDK token"}, {"speechkey", "nospeechkey", "speech key"},
+		{"gatewaytoken", "nogatewaytoken", "tts-gateway token"}}
+	willHave := map[string]bool{"key": was.Key != "", "sdk": was.Muse.SDKToken != "", "speechkey": was.Muse.Speech.Key != "",
+		"gatewaytoken": was.Muse.Speech.GatewayToken != ""}
 	for _, s := range secrets {
 		if strings.ContainsAny(r.PostFormValue(s.field), "\r\n") {
 			return "a " + s.what + " is one line"
@@ -332,10 +352,14 @@ func saveBrain(r *http.Request) string {
 	if b.Mode == config.BrainMuse && !willHave["sdk"] {
 		return "answering through Muse needs the Muse SDK token"
 	}
-	// The speech key is needed only where nothing else can speak: with no key, or with the built-in
-	// voice chosen, the device's own voice is all there is.
-	if b.Mode == config.BrainMuse && !builtInVoice() && (!willHave["speechkey"] || speech.Voice(b.Muse.Speech.Voice) == speech.BuiltIn) {
-		return "this image has no built-in voice, so answering through Muse needs the speech key and one of its voices"
+	// Something other than the device's own voice is needed only where it has none: then the voice
+	// chosen has to come to the tts-gateway or the endpoint, set up enough to speak.
+	key := ""
+	if willHave["speechkey"] {
+		key = "set"
+	}
+	if b.Mode == config.BrainMuse && !builtInVoice() && speech.Chosen(b.Muse.Speech.Voice, key, b.Muse.Speech.Gateway != "") == speech.BuiltIn {
+		return "this image has no built-in voice, so answering through Muse needs the tts-gateway, or the speech key and one of its voices"
 	}
 
 	if err := config.Set().Brain().Set(b); err != nil {
@@ -345,6 +369,8 @@ func saveBrain(r *http.Request) string {
 		"key":       config.Set().Brain().SetKey,
 		"sdk":       config.Set().Brain().SetSDKToken,
 		"speechkey": config.Set().Brain().SetSpeechKey,
+
+		"gatewaytoken": config.Set().Brain().SetGatewayToken,
 	}
 	for _, s := range secrets {
 		switch value := strings.TrimSpace(r.PostFormValue(s.field)); {
@@ -359,7 +385,7 @@ func saveBrain(r *http.Request) string {
 		}
 	}
 	slog.Info("setup page: the voice assistant was set", "mode", b.Mode, "stt", b.STT, "tts", b.TTS, "llm", b.LLM,
-		"speech", b.Muse.Speech.Base)
+		"speech", b.Muse.Speech.Base, "gateway", b.Muse.Speech.Gateway)
 	gadget.Get().Wake()
 	return ""
 }

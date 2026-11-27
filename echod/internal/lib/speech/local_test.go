@@ -115,20 +115,34 @@ func TestLocalAvailable(t *testing.T) {
 	}
 }
 
-// Without a key the device's own voice speaks whatever is set; with one, the setting does.
+// Without a key the device's own voice speaks whatever is set; with one, the setting does. A gateway
+// with an address speaks when it is chosen or nothing is, and the device's own voice when it has none.
 func TestChosen(t *testing.T) {
 	for _, c := range []struct {
 		setting, key string
+		gateway      bool
 		want         Voice
 	}{
-		{"", "", BuiltIn}, {"coral", "", BuiltIn}, {"builtin", "k", BuiltIn}, {"coral", "k", "coral"}, {"", "k", DefaultVoice},
+		{"", "", false, BuiltIn}, {"coral", "", false, BuiltIn}, {"builtin", "k", false, BuiltIn},
+		{"coral", "k", false, "coral"}, {"", "k", false, DefaultVoice},
+		{"", "", true, ByGateway}, {"", "k", true, ByGateway}, {"gateway", "", true, ByGateway},
+		{"gateway", "k", false, BuiltIn}, {"builtin", "", true, BuiltIn}, {"coral", "k", true, "coral"},
 	} {
-		if got := Chosen(c.setting, c.key); got != c.want {
-			t.Errorf("Chosen(%q, %q) = %q, want %q", c.setting, c.key, got, c.want)
+		if got := Chosen(c.setting, c.key, c.gateway); got != c.want {
+			t.Errorf("Chosen(%q, %q, %v) = %q, want %q", c.setting, c.key, c.gateway, got, c.want)
 		}
 	}
-	if all := Choices(); all[0] != BuiltIn || len(all) != 1+len(Voices) || all[0].Label() != "Built in" {
+	if all := Choices(); all[0] != BuiltIn || len(all) != 2+len(Voices) || all[0].Label() != "Built in" || ByGateway.Label() != "tts-gateway" {
 		t.Errorf("choices %v", all)
+	}
+	if o := Offered(false, false); len(o) != 1 {
+		t.Errorf("offered with nothing set up: %v", o)
+	}
+	if o := Offered(false, true); len(o) != 2 || o[1] != ByGateway {
+		t.Errorf("offered with a gateway: %v", o)
+	}
+	if o := Offered(true, true); len(o) != 2+len(Voices) {
+		t.Errorf("offered with both: %v", o)
 	}
 }
 

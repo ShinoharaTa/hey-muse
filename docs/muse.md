@@ -92,6 +92,7 @@ Muse answers in text, so the device has to say it.
 | Voice | What it needs | What leaves the device |
 |---|---|---|
 | **Built in** | The `techo5-pico` helper in the image | Nothing more |
+| **tts-gateway** | A **tts-gateway address** | The answer's text, to your own server |
 | A cloud voice (`alloy`, `coral` and nine others) | A **Speech key** | The answer's text, to the speech endpoint |
 
 The built-in voice is SVOX Pico, in U.S. English only. It sounds like a machine from 2009, and it
@@ -100,6 +101,15 @@ is fast. It makes 5 seconds of speech in about 200 ms on a Show 5.
 With no speech key, the built-in voice speaks whatever the setting says. With a key, the cloud
 voice speaks, and the built-in voice takes over for an answer when the endpoint fails before it
 has said anything (a bad key, a spent key, no network).
+
+[tts-gateway](https://github.com/ShinoharaTa/tts-gateway) is a small server you run yourself,
+which makes Japanese speech with ZEN-TTS on a CPU. Give its address (like `http://192.168.1.20:8710`),
+and its token if it has `TTS_TOKEN` set. **tts-gateway voice** is one of its voice ids from
+`GET /v1/engines`; left empty, the server's default speaks. With an address and no voice chosen,
+the gateway speaks. The device asks for each sentence on its own, as 16 kHz WAV, so the first
+sentence plays while the next is made. The built-in voice takes over when the gateway fails before
+it has said anything. ZEN-TTS's licence asks that the credit "音声合成：ZEN-TTS（https://zenryokukikai.com）"
+be shown where its speech is used; the setup page shows it under the gateway's settings.
 
 **How to say it** takes a few words of direction for a model that accepts them, such as "warmly,
 and not too fast". **Speech endpoint** and **Speech model** are for another OpenAI-style
@@ -278,7 +288,7 @@ A pairing made for `musecheck` alone, with `musepair -out` to a file of its own,
   answers.
 - `echod/internal/feature/voice/muse.go`: the turn. The first pause in Muse's answer is taken as
   the whole answer and spoken there and then.
-- `echod/internal/lib/speech`: the cloud voice and the built-in voice.
+- `echod/internal/lib/speech`: the cloud voice, the tts-gateway and the built-in voice.
 - `echod/internal/lib/avatar` and `echod/internal/feature/display/render_avatar.go`: the character
   on the turn screen.
 
