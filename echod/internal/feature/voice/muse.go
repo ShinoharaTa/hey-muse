@@ -143,10 +143,17 @@ func (m *viaMuse) Ready() bool {
 // who was heard whether to say it again, wait, or go and pair the device.
 func (m *viaMuse) Excuse() string {
 	if !m.link.Paired() {
-		return "This device is not paired with Muse yet."
+		return museUnpaired
 	}
-	return "I can't reach Muse right now."
+	return museUnreachable
 }
+
+// museUnpaired and museUnreachable are Muse's excuses, in English for the built-in voice; excuses has
+// them in the languages the tts-gateway speaks.
+const (
+	museUnpaired    = "This device is not paired with Muse yet."
+	museUnreachable = "I can't reach Muse right now."
+)
 
 // End hands the utterance over to be answered, off the send queue as direct does: Muse takes
 // seconds to answer, and the next turn's start must not wait behind it.

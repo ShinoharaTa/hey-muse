@@ -435,3 +435,17 @@ func TestMuseFollowUpsStayInWakeChat(t *testing.T) {
 		m.Stop()
 	}
 }
+
+// Each of Muse's excuses has a Japanese one for the tts-gateway, and a language with none keeps the
+// English.
+func TestMuseExcusesInJapanese(t *testing.T) {
+	for _, e := range []string{museUnpaired, museUnreachable} {
+		ja := excuseIn(e, "ja")
+		if ja == e || !strings.Contains(ja, "Muse") {
+			t.Errorf("%q in Japanese is %q", e, ja)
+		}
+		if got := excuseIn(e, "de"); got != e {
+			t.Errorf("%q in German is %q", e, got)
+		}
+	}
+}
